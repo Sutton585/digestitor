@@ -1,0 +1,20 @@
+{
+    "global_defaults": {
+        "debug": true,
+        "data_directory": "data",
+        "output_directory": "data/markdown/1/",
+        "scrape_log_path": "data/Scrape Log.md",
+        "min_post_age_hours": 12,
+        "min_score": 1,
+        "post_limit": 8,
+        "comment_detail": "MD",
+        "filter_keywords": [],
+        "url_blacklist": []
+    },
+    "sources": [
+        {
+            "name": "MarvelStudiosSpoilers",
+            "sort": "new"
+        }
+    ]
+}
