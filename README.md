@@ -128,3 +128,47 @@ The config.json file allows you to set global defaults and then override them fo
 Digestitor organizes its data into three main components. The markdown folder contains the notes you see in your live directory (ie. Obsidian). The json folder inside the data directory contains the structured data used by the system and AI agents. The database.db file inside the data directory acts as the high-speed index. Finally, the Scrape Log.md file provides a more human-readable record showing the status of every post, including which ones are currently maturing and when they are scheduled for their final re-scrape.
 ## Installation and First Run
 To get started, clone the repository to your local machine. Since Digestitor uses only the Python standard library, you do not need to install any external packages. Simply run python digestitor.py in your terminal. On the first run, if no config.json is found, the program will create a template for you. You can then edit this file to add your preferred subreddits and customize your settings.
+
+## Debug Mode and Path Management
+The `debug` flag is a powerful safety toggle designed to protect your live data during testing. Its behavior is consistent across all interfaces:
+
+### How Debug Mode Works
+- **When Debug is TRUE (Default/Test State):** All custom path settings for `output_directory`, `data_directory`, and `scrape_log_path` are ignored. The system forces all output into the local `/data` folder within the repository. This ensures that test runs do not pollute your Obsidian vault or live research database.
+- **When Debug is FALSE (Production State):** The system respects your custom path settings, allowing you to route Markdown notes and logs directly into your preferred workspace (e.g., an Obsidian Vault).
+
+### Configuring Paths and Debug Mode
+You can toggle debug mode and set your production paths in three ways:
+
+#### 1. In config.json (Recommended for persistent setups)
+Set your permanent Obsidian paths here, then toggle `debug` to `false` when you are ready to go live.
+```json
+{
+    "global_defaults": {
+        "debug": false,
+        "output_directory": "/Users/name/Documents/MyVault/Reddit",
+        "scrape_log_path": "/Users/name/Documents/MyVault/Dashboards/Scrape Log.md"
+    }
+}
+```
+
+#### 2. Via CLI (Ideal for quick overrides)
+You can force debug mode on or off from the terminal, regardless of what is in your config file.
+```bash
+# Run a safe test into local /data/ folder
+python digestitor.py --debug
+
+# Run a live scrape into your configured Obsidian path
+python digestitor.py --no-debug
+```
+
+#### 3. As a Python Resource (For developers)
+When importing the scraper, pass the `debug` flag directly to the constructor.
+```python
+from digestitor import RedditScraper
+# Initialize in production mode to use your custom config paths
+scraper = RedditScraper(debug=False)
+```
+
+### Typical Workflow Example
+1. **Test:** Set `"debug": true` in your config. Experiment with new subreddits or detail settings. Verify the results in the local `/data/markdown/` directory.
+2. **Deploy:** Once satisfied, set `"debug": false` and point your `output_directory` to the live directory, (ie. your Obsidian Vault). All future runs will now populate your vault with beautifully formatted notes organized by subreddit.
