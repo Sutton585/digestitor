@@ -117,10 +117,10 @@ Description: The maximum number of new threads Digestitor will attempt to fetch 
 
 ### Comment Detail Presets
 Description: Presets to control the exact volume and depth of comments captured. 
-- XS: Top 3 top-level comments, 0 replies.
-- SM: Top 5 top-level comments, 1 reply each.
-- MD (Default): Top 8 top-level comments, 2 replies each.
-- LG: Top 10 top-level comments, 3 depth (3 replies, 1 sub-reply).
+- XS: Top 3 top-level comments, 0 replies (Literal: 3 total).
+- SM: Top 5 top-level comments, 1 reply each (Literal: 5 + 5 = 10 max).
+- MD (Default): Top 8 top-level comments, 2 replies each (Literal: 8 + 16 = 24 max).
+- LG: Top 10 top-level comments, 3 depth (3 replies, 1 sub-reply) (Literal: 10 + 30 + 10 = 50 max).
 - XL: No limits. Recursively captures every single comment and reply.
 - Config: "comment_detail": "MD"
 - CLI: --detail MD
