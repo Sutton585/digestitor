@@ -1,12 +1,12 @@
 {
     "global_defaults": {
         "debug": true,
-        "data_directory": "data",
-        "output_directory": "data/markdown/1/",
-        "scrape_log_path": "data/Scrape Log.md",
+        "data_directory": "data", // data files will end up in `data` directory in default/debug mode. 
+        "output_directory": "data/markdown", // markdown files will end up in directories by subreddit in path `data/markdown` in default/debug mode. 
+        "scrape_log_path": "data/Scrape Log.md", // scrape log will end up in `data/Scrape Log.md"` in default/debug mode. 
         "min_post_age_hours": 12,
         "min_score": 1,
-        "post_limit": 8,
+        "post_limit": 2,
         "comment_detail": "MD",
         "filter_keywords": [],
         "url_blacklist": []
@@ -14,7 +14,8 @@
     "sources": [
         {
             "name": "MarvelStudiosSpoilers",
-            "sort": "new"
+            "sort": "new",
+            "comment_detail": "SM"
         }
     ]
 }

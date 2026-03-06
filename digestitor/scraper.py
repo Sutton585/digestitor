@@ -22,16 +22,17 @@ class RedditScraper:
         self.client = RedditClient()
         
         # Unified Data Directory management
-        self.data_dir = self.global_defaults.get('data_directory', 'data')
-        self.db_path = os.path.join(self.data_dir, "database.db")
-        self.json_dir = os.path.join(self.data_dir, "json")
-        
         if self.debug:
+            self.data_dir = 'data'
             self.output_dir = os.path.join(self.data_dir, "markdown")
             self.scrape_log_path = os.path.join(self.data_dir, "Scrape Log.md")
         else:
+            self.data_dir = self.global_defaults.get('data_directory', 'data')
             self.output_dir = self.global_defaults.get('output_directory', 'data/markdown')
             self.scrape_log_path = self.global_defaults.get('scrape_log_path', 'data/Scrape Log.md')
+
+        self.db_path = os.path.join(self.data_dir, "database.db")
+        self.json_dir = os.path.join(self.data_dir, "json")
 
         os.makedirs(self.data_dir, exist_ok=True)
         os.makedirs(self.json_dir, exist_ok=True)
@@ -49,39 +50,40 @@ class RedditScraper:
         processor = PostProcessor(self.db_manager, self.global_defaults['url_blacklist'])
         rebuilt_count = 0
         
-        for filename in os.listdir(output_dir):
-            if not filename.endswith(".md") or filename == "Scrape Log.md":
-                continue
-                
-            file_path = os.path.join(output_dir, filename)
-            frontmatter = processor.parse_frontmatter(file_path)
-            
-            if frontmatter and 'post_id' in frontmatter:
-                post_id = frontmatter['post_id']
-                if self.db_manager.post_exists(post_id):
+        for root, dirs, files in os.walk(output_dir):
+            for filename in files:
+                if not filename.endswith(".md") or filename == "Scrape Log.md":
                     continue
                     
-                project = frontmatter.get('project', 'N/A')
-                author = frontmatter.get('author', 'N/A')
-                subreddit = frontmatter.get('subreddit', 'N/A')
-                score_str = frontmatter.get('score', '0')
-                score = int(score_str) if score_str.isdigit() else 0
-                post_date_str = frontmatter.get('post_date')
-                rescrape_after = frontmatter.get('rescrape_after')
-                title = filename.replace(f"_{post_id}.md", "")
-                
-                try:
-                    post_date = datetime.strptime(post_date_str, "%Y-%m-%d") if post_date_str else datetime.now()
-                except:
-                    post_date = datetime.now()
-                
-                json_path = os.path.join(self.json_dir, f"{post_id}.json")
-                if os.path.exists(json_path):
-                    self.db_manager.add_or_update_post(
-                        post_id, title, author, subreddit, project, score, "rebuilt",
-                        post_date, file_path, first_scrape=True, rescrape_after=rescrape_after
-                    )
-                    rebuilt_count += 1
+                file_path = os.path.join(root, filename)
+                frontmatter = processor.parse_frontmatter(file_path)
+            
+                if frontmatter and 'post_id' in frontmatter:
+                    post_id = frontmatter['post_id']
+                    if self.db_manager.post_exists(post_id):
+                        continue
+                        
+                    project = frontmatter.get('project', 'N/A')
+                    author = frontmatter.get('author', 'N/A')
+                    subreddit = frontmatter.get('subreddit', 'N/A')
+                    score_str = frontmatter.get('score', '0')
+                    score = int(score_str) if score_str.isdigit() else 0
+                    post_date_str = frontmatter.get('post_date')
+                    rescrape_after = frontmatter.get('rescrape_after')
+                    title = filename.replace(f"_{post_id}.md", "")
+                    
+                    try:
+                        post_date = datetime.strptime(post_date_str, "%Y-%m-%d") if post_date_str else datetime.now()
+                    except:
+                        post_date = datetime.now()
+                    
+                    json_path = os.path.join(self.json_dir, f"{post_id}.json")
+                    if os.path.exists(json_path):
+                        self.db_manager.add_or_update_post(
+                            post_id, title, author, subreddit, project, score, "rebuilt",
+                            post_date, file_path, first_scrape=True, rescrape_after=rescrape_after
+                        )
+                        rebuilt_count += 1
         
         if rebuilt_count > 0:
             print(f"  Successfully rebuilt {rebuilt_count} records from Markdown files.")
@@ -262,8 +264,20 @@ class RedditScraper:
                 rescrape_after_iso = rescrape_after.isoformat()
 
         markdown_content, project = processor.generate_markdown(cleaned_post, rescrape_after=rescrape_after_iso)
+        
+        # Organize into subreddits/folders
+        subreddit_name = cleaned_post['subreddit']
+        if subreddit_name.startswith('r/'):
+            subreddit_name = subreddit_name[2:]
+            
+        subreddit_dir = os.path.join(self.output_dir, subreddit_name)
+        os.makedirs(subreddit_dir, exist_ok=True)
+        
         md_filename = f"{project}_{post_id}.md"
-        md_path = os.path.join(self.output_dir, md_filename)
+        md_path = os.path.join(subreddit_dir, md_filename)
+        
+        # Ensure the directory for the markdown file exists (in case project has slashes or is N/A)
+        os.makedirs(os.path.dirname(md_path), exist_ok=True)
         
         with open(md_path, 'w', encoding='utf-8') as f:
             f.write(markdown_content)

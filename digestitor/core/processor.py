@@ -203,4 +203,6 @@ class PostProcessor:
 ## Top Comments
 
 {comments_md}"""
-        return markdown_content, project
+        # Sanitize project name for filename
+        safe_project = project.replace('/', '-')
+        return markdown_content, safe_project
