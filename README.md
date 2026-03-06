@@ -6,11 +6,17 @@ Whether you are building a research database, feeding an AI agent, or just keepi
 ## System Overview and Core Logic
 Digestitor operates on a hierarchical model where data flows from Reddit's RSS and JSON APIs into local structured storage. The system is designed to be resilient, allowing users to manage their data directly through the file system.
 
+### Project Name Sanitization
+The system automatically sanitizes project names derived from Reddit flairs to ensure they are safe for all file systems. Any forward slashes (`/`) in a project name are replaced with dashes (`-`), preventing unintended nested directory creation.
+
 ### The Multi-Layer Source of Truth
 Digestitor uses a tripartite authority model to ensure data integrity:
-- **Markdown Files (The Authority):** The ultimate source of truth. If you edit the `flair` or `rescrape_after` date in your Obsidian note, the system detects this on the next run and updates the database. Deleting a note tells the system to "forget" the post entirely.
-- **SQLite Database (The Memory):** Acts as a high-speed cache and state-tracker. It handles the logic for maturity delays and history. The DB is "self-healing"—if deleted, it will automatically rebuild itself by scanning your Markdown folders.
-- **JSON Archive (The Backup):** Stores sanitized data for every scrape. This allows for a total vault rebuild without re-querying Reddit if your Markdown files are ever lost.
+- Markdown Files (The Authority): 
+    The primary source of truth. If you edit the `flair` or `rescrape_after` date in your Obsidian note, the system detects this on the next run and updates the database. Deleting a note tells the system to "forget" the post entirely.
+- SQLite Database (The Memory):
+    Acts as a high-speed cache and state-tracker. It handles the logic for maturity delays and history. The DB is "self-healing"—if deleted, it will automatically rebuild itself by scanning your Markdown folders.
+- JSON Archive (The Backup):
+    Stores sanitized data for every scrape. This allows for a total vault rebuild without re-querying Reddit if your Markdown files are ever lost.
 
 ### Safe Vault Coexistence
 To allow Digestitor notes to live alongside your existing research, the system uses a surgical ownership check. It only processes files where the `post_id` in the front-matter is present. This prevents the scraper from ever touching unrelated Markdown files in the same directory.
@@ -88,16 +94,27 @@ The comment detail setting selects one of the presets (XS, SM, MD, LG, XL) to co
 - In Python, pass 'comment_detail' in the overrides dictionary.
 
 ### Reddit Sort Method
-This setting controls how Digestitor requests the feed from Reddit. You can choose from new, hot, top, or rising. 
-- In the config file, use "sort". 
-- On the CLI, use --sort. 
-- In Python, pass 'sort' in the overrides dictionary.
+This setting controls how Digestitor requests the feed from Reddit. The choice of sort method determines the "flavor" of your research or digest:  
+- Sort methods:    
+    - new (Default)
+        The most recently-published posts; useful when you don't want to miss anything or you're setting up periodic updates on a scheduled interval.
+    - hot
+        Posts that are currently trending and generating highest engagement; great for daily discussion highlights.
+    - top
+        The highest-voted posts over a period. 
+    - rising
+        The posts gaining momentum; useful for finding good topics before they reach the front page.
+- How to use:
+    - In the config file, use "sort". 
+    - On the CLI, use --sort. 
+    - In Python, pass 'sort' in the overrides dictionary.
 
 ### Minimum Post Age Hours
 This determines the window of time a post must exist before it is considered mature. Posts newer than this will be scheduled for a re-scrape. Set this to `0` to disable re-scraping logic entirely.
 - In the config file, use "min_post_age_hours".
 - On the CLI, use --age.
 - In Python, pass 'min_post_age_hours' in the overrides dictionary.
+
 ### Filter Keywords
 This is a list of case-insensitive keywords. If any of these words appear in a post's title, the post will be skipped. 
 - In the config file, use "filter_keywords" as a JSON list. 
@@ -133,6 +150,30 @@ This setting defines the path for the human-readable Markdown dashboard that sum
 - In the config file, use "scrape_log_path". 
 - On the CLI, use --log-path.
 - In Python, pass 'scrape_log_path' in the overrides dictionary.
+
+### Subreddit Folders
+This toggle determines whether the system creates a sub-folder for each subreddit within your output directory. If disabled (default), all notes are saved directly into the output directory.
+- In the config file, use "generate_subreddit_folders".
+- On the CLI, use --folders [True/False].
+- In Python, pass 'generate_subreddit_folders' in the overrides dictionary.
+
+### Save JSON
+This toggle determines whether the sanitized JSON data fetched from Reddit is persisted to your data directory after the Markdown note is generated. Disabling this can save significant disk space if you only need the final notes.
+- In the config file, use "save_json".
+- On the CLI, use --save-json [True/False].
+- In Python, pass 'save_json' in the overrides dictionary.
+
+### Update Scrape Log
+This toggle controls whether the human-readable "Scrape Log.md" dashboard is updated during the run.
+- In the config file, use "update_log".
+- On the CLI, use --update-log [True/False].
+- In Python, pass 'update_log' in the overrides dictionary.
+
+### Update Database
+This toggle controls whether the scrape is recorded in the SQLite state database. Disabling this is useful for one-off, transient scrapes where you do not want to track maturity or prevent future re-scrapes.
+- In the config file, use "update_db".
+- On the CLI, use --update-db [True/False].
+- In Python, pass 'update_db' in the overrides dictionary.
 
 ### Save JSON
 This toggle determines whether the sanitized JSON data fetched from Reddit is persisted to your data directory after the Markdown note is generated. Disabling this can save disk space if you only need the final notes.
@@ -183,7 +224,6 @@ python digestitor.py --debug
 # Run a live scrape into your configured Obsidian path
 python digestitor.py --no-debug
 ```
-
 
 #### 3. As a Python Resource (For developers)
 When importing the scraper, pass the `debug` flag directly to the constructor.
@@ -241,47 +281,3 @@ Digestitor organizes its data into three main components. The markdown folder co
 
 ## Installation and First Run
 To get started, clone the repository to your local machine. Since Digestitor uses only the Python standard library, you do not need to install any external packages. Simply run python digestitor.py in your terminal. On the first run, if no config.json is found, the program will create a template for you. You can then edit this file to add your preferred subreddits and customize your settings.
-
----
-## DOCUMENTATION UPDATES (FOR MANUAL INTEGRATION)
-The following blocks should be pasted into the corresponding sections of your README.md.
-
-### PASTE IN SECTION: "Comprehensive Configuration Guide" (After Scrape Log Path)
-### Subreddit Folders
-This toggle determines whether the system creates a sub-folder for each subreddit within your output directory. If disabled (default), all notes are saved directly into the output directory.
-- In the config file, use "generate_subreddit_folders".
-- On the CLI, use --folders [True/False].
-- In Python, pass 'generate_subreddit_folders' in the overrides dictionary.
-
-### Save JSON
-This toggle determines whether the sanitized JSON data fetched from Reddit is persisted to your data directory after the Markdown note is generated. Disabling this can save significant disk space if you only need the final notes.
-- In the config file, use "save_json".
-- On the CLI, use --save-json [True/False].
-- In Python, pass 'save_json' in the overrides dictionary.
-
-### Update Scrape Log
-This toggle controls whether the human-readable "Scrape Log.md" dashboard is updated during the run.
-- In the config file, use "update_log".
-- On the CLI, use --update-log [True/False].
-- In Python, pass 'update_log' in the overrides dictionary.
-
-### Update Database
-This toggle controls whether the scrape is recorded in the SQLite state database. Disabling this is useful for one-off, transient scrapes where you do not want to track maturity or prevent future re-scrapes.
-- In the config file, use "update_db".
-- On the CLI, use --update-db [True/False].
-- In Python, pass 'update_db' in the overrides dictionary.
-
-### PASTE IN SECTION: "System Overview and Core Logic" (New Subsection)
-### Project Name Sanitization
-The system automatically sanitizes project names derived from Reddit flairs to ensure they are safe for all file systems. Any forward slashes (`/`) in a project name are replaced with dashes (`-`), preventing unintended nested directory creation.
-
-### PASTE IN SECTION: "Debug Mode and Path Management" (Update CLI Example)
-#### 2. Via CLI (Ideal for quick overrides)
-You can force debug mode on or off from the terminal. Unlike standard flags, these accept explicit boolean values for maximum clarity in orchestration scripts.
-```bash
-# Run a safe test into local /data/ folder
-python digestitor.py --debug True
-
-# Run a live scrape into your configured production paths
-python digestitor.py --debug False
-```

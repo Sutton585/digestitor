@@ -53,24 +53,24 @@ class Config:
     def get_global_defaults(self):
         return self.data.get('global_defaults', self.DEFAULT_CONFIG['global_defaults'])
 
-    def get_sources(self):
-        return self.data.get('sources', self.DEFAULT_CONFIG['sources'])
+    def get_jobs(self):
+        """Returns the raw list of scrape jobs from the config."""
+        return self.data.get('jobs', self.data.get('calls', self.data.get('sources', self.DEFAULT_CONFIG['sources'])))
 
-    def get_source_config(self, source_name):
+    def get_job_config(self, job_data):
+        """Merges global defaults with a specific job's overrides."""
         global_defaults = self.get_global_defaults()
-        sources = self.get_sources()
-        
-        source = next((s for s in sources if s['name'] == source_name), None)
-        if not source:
-            # Fallback to global defaults for ad-hoc source
-            config = global_defaults.copy()
-            config['name'] = source_name
-            return config
-        
-        # Merge global defaults with source overrides
         config = global_defaults.copy()
-        config.update(source)
+        config.update(job_data)
         return config
 
-    def get_all_source_configs(self):
-        return [self.get_source_config(s['name']) for s in self.get_sources()]
+    def get_all_job_configs(self):
+        """Returns a list of all fully-merged job configurations."""
+        return [self.get_job_config(j) for j in self.get_jobs()]
+
+    def get_adhoc_job_config(self, subreddit_name):
+        """Creates a default job configuration for a subreddit not in the list."""
+        global_defaults = self.get_global_defaults()
+        config = global_defaults.copy()
+        config['name'] = subreddit_name
+        return config

@@ -7,20 +7,21 @@
         "generate_subreddit_folders": true,
         "min_post_age_hours": 12,
         "min_score": 1,
-        "post_limit": 2,
+        "post_limit": 1,
         "comment_detail": "MD",
         "filter_keywords": [],
         "url_blacklist": []
     },
-    "sources": [
+    "jobs": [
         {
             "name": "ArtificialInteligence",
             "sort": "new",
             "comment_detail": "SM"
         },
         {
-            "name": "MachineLearning",
-            "sort": "best"
+            "name": "ArtificialInteligence",
+            "sort": "top",
+            "comment_detail": "XL"
         }
     ]
 }

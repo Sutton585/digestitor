@@ -18,17 +18,17 @@ Every scraper must support three distinct modes of interaction with 100% parity 
 ### A. The Configuration File (`config.json`)
 Used for persistent, automated workflows. It defines:
 - **Global Defaults:** Baseline settings for all runs.
-- **Sources:** A list of specific entities (subreddits, feeds, accounts) with their own specific overrides.
+- **Jobs:** A sequence of specific scrape tasks. Each job defines its target (e.g., subreddit) and can have its own specific overrides. Note that you can have multiple jobs for the same origin with different settings.
 
 ### B. The Command Line Interface (CLI)
 Used for ad-hoc exploration or cron-job orchestration.
-- Must support `--source` for one-off scrapes of entities not in the config.
+- Must support `--subreddit` for one-off scrape jobs of entities not in the config.
 - Must support explicit overrides for every parameter (e.g., `--limit`, `--output-dir`, `--detail`).
-- Must support behavioral toggles: `--save-json`, `--update-log`, and `--update-db` (Boolean).
+- Must support behavioral toggles: `--save-json`, `--update-log` (Boolean).
 
 ### C. The Python Resource (Importable Module)
 Used for higher-level orchestration (AI agents, custom dashboards).
-- The main `Scraper` class must accept an `overrides` dictionary in its `run()` method to bypass any global or source-specific defaults, including all path and behavioral settings.
+- The main `Scraper` class must accept an `overrides` dictionary in its `run()` method to bypass any global or job-specific defaults, including all path and behavioral settings.
 
 ---
 
@@ -54,31 +54,30 @@ Data flows through three layers of increasing permanence:
 1. **JSON Archive (`/data/json/`):** The raw, cleaned data from the source. Used for AI processing or total rebuilds.
 2. **SQLite Index (`database.db`):** Tracks metadata, processing status, and file paths. Crucial for handling "maturing" content (re-scraping items after a delay). This index is considered a cache and should be rebuildable from the Markdown files.
 3. **Markdown Notes (`output_directory/`):** The final human-readable product. 
-...
-    - **Entity Organization:** Files should be organized into subdirectories named after the source entity (e.g., `/SubredditName/`) if the toggle is enabled.
+    - **Entity Organization:** Files should be organized into subdirectories named after the origin entity (e.g., `/SubredditName/`) if the toggle is enabled.
     - **Atomic Naming:** Filenames should follow the pattern `[Subreddit]_[ID].md` to ensure uniqueness and portability.
     - **Cumulative Content:** Updates to a note (e.g., when a post reaches maturity) should **append** new content (like updated comment sections) to the end of the existing file rather than overwriting it.
 
 ---
 
-## 5. Metadata and Nomenclature
+## 6. Metadata and Nomenclature
 Standard field names must be used in front-matter and database columns:
 - **`flair`:** (Formerly `project`). Used to categorize the post within the source (e.g., Reddit Flair).
 - **`post_link`:** (Formerly `story_link`). Used to link to related internal notes or external URLs.
 
 ---
 
-## 6. Granular Control & Overrides
-The orchestration layer assumes that any specific call can define its own target.
+## 7. Granular Control & Overrides
+The orchestration layer assumes that any specific job can define its own target.
 - **Dynamic Pathing:** If a CLI command specifies `--output-dir`, the scraper must use that path for that specific run, even if a different path is defined in `config.json`.
 - **Precedence Order:** 
     1. **Direct Overrides:** (CLI arguments or Python method parameters).
-    2. **Source-Specific Settings:** (Values defined inside a source object in `config.json`).
+    2. **Job-Specific Settings:** (Values defined inside a job object in `config.json`).
     3. **Global Defaults:** (Values defined in the `global_defaults` section of `config.json`).
 
 ---
 
-## 6. The Human-Readable Log (`Scrape Log.md`)
+## 8. The Human-Readable Log (`Scrape Log.md`)
 Every run must update a Markdown-formatted log. This provides a dashboard for the user to see:
 - What was new in the last run.
 - What items are currently "maturing" and when they will be re-scraped.
@@ -86,7 +85,7 @@ Every run must update a Markdown-formatted log. This provides a dashboard for th
 
 ---
 
-## 7. Standard Implementation Checklist
+## 9. Standard Implementation Checklist
 When building a new scraper, ensure the following classes exist:
 - `Config`: Manages the hierarchy of defaults and overrides.
 - `Client`: Handles HTTP requests (with robust headers/fallbacks to avoid 403s).

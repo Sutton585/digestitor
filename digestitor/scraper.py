@@ -119,50 +119,53 @@ class RedditScraper:
         else:
             print("  State is healthy.")
 
-    def run(self, source_name=None, overrides=None):
+    def run(self, subreddit_name=None, overrides=None):
         self.validate_state()
         
-        if source_name:
-            source_conf = self.config_manager.get_source_config(source_name)
-            sources = [source_conf]
+        if subreddit_name:
+            # Targeted ad-hoc job
+            job_conf = self.config_manager.get_adhoc_job_config(subreddit_name)
+            jobs = [job_conf]
         else:
-            sources = self.config_manager.get_all_source_configs()
+            # Process all jobs defined in config
+            jobs = self.config_manager.get_all_job_configs()
 
         new_posts_total = 0
         updated_posts_total = 0
         
-        # Track if any source wants to update the log, and which log to update
+        # Track if any job wants to update the log, and which log to update
         final_log_path = self.scrape_log_path
         any_log_update = False
 
-        for source_config in sources:
-            if not source_config: continue
+        for job_config in jobs:
+            if not job_config: continue
             if overrides:
-                source_config.update({k: v for k, v in overrides.items() if v is not None})
+                job_config.update({k: v for k, v in overrides.items() if v is not None})
             
-            # Behavioral check: log path can be overridden per source
-            if not self.debug and 'scrape_log_path' in source_config:
-                final_log_path = source_config['scrape_log_path']
+            # Behavioral check: log path can be overridden per job
+            if not self.debug and 'scrape_log_path' in job_config:
+                final_log_path = job_config['scrape_log_path']
             
-            if source_config.get('update_log', True):
+            if job_config.get('update_log', True):
                 any_log_update = True
 
-            new_count, updated_count = self.scrape_source(source_config)
+            new_count, updated_count = self.execute_job(job_config)
             new_posts_total += new_count
             updated_posts_total += updated_count
 
         print("\n>>> Checking for maturing posts in database...")
         maturing_posts = self.db_manager.get_maturing_posts()
         if maturing_posts:
-            if source_name:
-                maturing_posts = [p for p in maturing_posts if p['subreddit'].endswith(source_name)]
+            # If a specific subreddit was requested, only mature those
+            if subreddit_name:
+                maturing_posts = [p for p in maturing_posts if p['subreddit'].endswith(subreddit_name)]
             
             for db_post in maturing_posts:
                 sub = db_post['subreddit']
                 if sub.startswith('r/'): sub = sub[2:]
-                post_config = self.config_manager.get_source_config(sub)
-                if not post_config:
-                    post_config = self.global_defaults.copy()
+                
+                # Use default config for maturity updates (unless targeted run)
+                post_config = self.global_defaults.copy()
                 if overrides:
                     post_config.update({k: v for k, v in overrides.items() if v is not None})
                 
@@ -179,19 +182,19 @@ class RedditScraper:
             
         # Global DB pruning check (respecting the highest max_records in the current run)
         max_records = 1000
-        for config in sources:
+        for config in jobs:
             max_records = max(max_records, config.get('max_db_records', 1000))
         self.db_manager.prune_old_records(max_records)
 
         print(f"\nFinished run. Total New: {new_posts_total}, Total Updated: {updated_posts_total}")
 
-    def scrape_source(self, config):
-        source_name = config.get('name', 'Unknown')
+    def execute_job(self, config):
+        subreddit_name = config.get('name', config.get('subreddit', 'Unknown'))
         sort = config.get('sort', 'new')
         limit = config.get('post_limit', 8)
         
-        rss_url = f"https://www.reddit.com/r/{source_name}/{sort}/.rss"
-        print(f"\n>>> Processing Source: {source_name} (Sort: {sort}, Limit: {limit})")
+        rss_url = f"https://www.reddit.com/r/{subreddit_name}/{sort}/.rss"
+        print(f"\n>>> Executing Job: {subreddit_name} (Sort: {sort}, Limit: {limit})")
         
         processor = PostProcessor(self.db_manager, config.get('url_blacklist', []), config.get('comment_detail', 'MD'))
         posts = self.client.get_posts_from_rss(rss_url, limit)
@@ -349,7 +352,7 @@ def main():
     parser = argparse.ArgumentParser(description="Digestitor v3.0: Granular Reddit-to-Markdown Scraper")
     parser.add_argument("--debug", type=str2bool, nargs='?', const=True, default=None, help="Enable/disable debug mode (local data output).")
     parser.add_argument("--config", default="config.json", help="Path to config file.")
-    parser.add_argument("--source", help="Run only a specific source (even if not in config).")
+    parser.add_argument("--subreddit", help="Run an ad-hoc call for a specific subreddit (even if not in config).")
     
     parser.add_argument("--limit", type=int, help="Override post limit.")
     parser.add_argument("--min-score", type=int, help="Override min score.")
@@ -391,7 +394,7 @@ def main():
         overrides['url_blacklist'] = [bl.strip() for bl in args.blacklist.split(',')]
 
     scraper = RedditScraper(config_path=args.config, debug=args.debug)
-    scraper.run(source_name=args.source, overrides=overrides)
+    scraper.run(subreddit_name=args.subreddit, overrides=overrides)
 
 
 if __name__ == "__main__":
