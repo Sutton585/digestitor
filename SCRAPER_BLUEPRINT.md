@@ -39,12 +39,12 @@ Debug mode is the primary safety mechanism for development and troubleshooting.
 - **Safety Guarantee:** A user should be able to turn on `debug` and run any command without fear of polluting their production Obsidian vault or live database.
 
 ---
-
-## 4. Behavioral Toggles
-Scrapers must allow users to suppress side effects for specialized workflows:
-- **`save_json` (Boolean):** Whether to persist the raw JSON data after processing.
+## 4. Behavioral Toggles & Limits
+Scrapers must allow users to suppress side effects or limit footprints:
+- **`save_json` (Boolean):** Whether to persist the sanitized JSON data after processing.
 - **`update_log` (Boolean):** Whether to append the run results to the human-readable Markdown log.
-- **`update_db` (Boolean):** Whether to record the scrape in the SQLite state database (useful for purely transient "view-only" scrapes).
+- **`max_db_records` (Integer):** Maximum number of records to keep in the SQLite index. Older records are pruned to keep the database size manageable.
+- **`min_post_age_hours` (Integer):** Setting this to `0` must disable all maturity/re-scraping logic, making every scrape final.
 
 ---
 
@@ -52,8 +52,9 @@ Scrapers must allow users to suppress side effects for specialized workflows:
 Data flows through three layers of increasing permanence:
 
 1. **JSON Archive (`/data/json/`):** The raw, cleaned data from the source. Used for AI processing or total rebuilds.
-2. **SQLite Index (`database.db`):** Tracks metadata, processing status, and file paths. Crucial for handling "maturing" content (re-scraping items after a delay).
+2. **SQLite Index (`database.db`):** Tracks metadata, processing status, and file paths. Crucial for handling "maturing" content (re-scraping items after a delay). This index is considered a cache and should be rebuildable from the Markdown files.
 3. **Markdown Notes (`output_directory/`):** The final human-readable product. 
+...
     - **Entity Organization:** Files should be organized into subdirectories named after the source entity (e.g., `/SubredditName/`) if the toggle is enabled.
     - **Atomic Naming:** Filenames should follow the pattern `[Subreddit]_[ID].md` to ensure uniqueness and portability.
     - **Cumulative Content:** Updates to a note (e.g., when a post reaches maturity) should **append** new content (like updated comment sections) to the end of the existing file rather than overwriting it.

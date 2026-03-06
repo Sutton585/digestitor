@@ -25,6 +25,8 @@ This allows you to track how discussions evolve over time within a single note.
 ### Context vs. Freshness: The Maturity Logic
 Scraping a thread the moment it is posted often misses the best discussion. Digestitor uses the `min_post_age_hours` setting to solve this. If a post is "young," it is scraped immediately for freshness, but marked as "Maturing." The system then automatically returns after the age threshold is met to append the final, mature conversation.
 
+**Note:** If you do not care about post maturity and want every scrape to be final, simply set `min_post_age_hours` to `0`. This disables all re-scraping logic.
+
 ## Comprehensive Configuration Guide
 Every aspect of Digestitor can be controlled through the config file, the command line, or as a Python dependency.
 
@@ -92,11 +94,10 @@ This setting controls how Digestitor requests the feed from Reddit. You can choo
 - In Python, pass 'sort' in the overrides dictionary.
 
 ### Minimum Post Age Hours
-This determines the window of time a post must exist before it is considered mature. Posts newer than this will be scheduled for a re-scrape. 
-- In the config file, use "min_post_age_hours". 
-- On the CLI, use --age. 
+This determines the window of time a post must exist before it is considered mature. Posts newer than this will be scheduled for a re-scrape. Set this to `0` to disable re-scraping logic entirely.
+- In the config file, use "min_post_age_hours".
+- On the CLI, use --age.
 - In Python, pass 'min_post_age_hours' in the overrides dictionary.
-
 ### Filter Keywords
 This is a list of case-insensitive keywords. If any of these words appear in a post's title, the post will be skipped. 
 - In the config file, use "filter_keywords" as a JSON list. 
