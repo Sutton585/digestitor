@@ -14,7 +14,14 @@ pip install requests
 
 ---
 
-## 2. One Tool, Three Interfaces
+## 2. Key Dependencies
+
+- **Python Standard Library (urllib, sqlite3, xml.etree):** Used for all core operations (network, database, and RSS parsing) to ensure maximum portability and zero-dependency reliability by default.
+- **Requests (Recommended):** Used as an optional upgrade to handle advanced anti-bot measures (like 403 Forbidden blocks) that the standard library may struggle with.
+
+---
+
+## 3. One Tool, Three Interfaces
 Digestitor is designed to be agnostic. Every setting and feature is available with 100% parity across three interaction modes: the CLI, the config file, and as a Python resource.
 
 ### Using the Command Line Interface
@@ -56,7 +63,7 @@ The config.json file allows you to set global defaults and then define a list of
 
 ---
 
-## 3. Core Concepts & Philosophy
+## 4. Core Concepts & Philosophy
 To use Digestitor effectively, it is important to understand its foundational pillars.
 
 ### The Multi-Layer Source of Truth
@@ -87,7 +94,7 @@ Additionally, the system automatically sanitizes labels derived from Reddit flai
 
 ---
 
-## 4. Debug Mode: The Safety Toggle
+## 5. Debug Mode: The Safety Toggle
 The debug flag is a powerful safety toggle designed to protect your live data during testing. Its behavior is consistent across all interfaces.
 
 ### How Debug Mode Works
@@ -100,13 +107,13 @@ The debug flag is a powerful safety toggle designed to protect your live data du
 
 ---
 
-## 5. Automation: Set It and Forget It
+## 6. Automation: Set It and Forget It
 To maintain a fresh knowledge base, you can schedule Digestitor to run automatically. On macOS or Linux, you can use a cron job to trigger a scrape every morning at 8:00 AM:
 0 8 * * * cd /path/to/digestitor && /usr/bin/python3 digestitor.py --debug False
 
 ---
 
-## 6. Comprehensive Configuration Reference
+## 7. Comprehensive Configuration Reference
 Use this section as an encyclopedia for fine-tuning your data pipeline.
 
 ### Post Limit
@@ -188,5 +195,5 @@ Description: Whether the system creates a sub-folder for each subreddit within y
 
 ---
 
-## 7. Directory Structure and Files
+## 8. Directory Structure and Files
 Digestitor organizes its data into three main components. The markdown folder contains the notes you see in your live directory (ie. Obsidian). The json folder inside the data directory contains the structured data used by the system and AI agents. The database.db file inside the data directory acts as the high-speed index. Finally, the Scrape Log.md file provides a more human-readable record showing the status of every post, including which ones are currently maturing and when they are scheduled for their final re-scrape.
