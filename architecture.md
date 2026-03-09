@@ -18,7 +18,7 @@ To build a professional-grade Reddit scraper designed for high-signal knowledge 
 ## 3. The "5 Buckets" Implementation Plan
 
 ### A. Config (Settings Management)
-Handles configuration merging following the Precedence Order (CLI > Job-Specific > Global Defaults). Validates these platform-specific toggles:
+Handles configuration merging following the Precedence Order (CLI > Task-Specific > Global Defaults). Validates these platform-specific toggles:
 - `max_results` (Integer): Maximum threads to fetch per feed run.
 - `detail` (Enum: XS, SM, MD, LG, XL): Controls the depth and volume of captured comments (e.g., `MD` = Top 8 comments, 2 replies deep).
 - `sort` (Enum: new, hot, top, rising): Determines the targeted `.rss` endpoint.
@@ -49,7 +49,7 @@ Acts as the high-speed SQLite cache (`database.db`).
 ### E. Orchestrator / Scraper (The Execution Loop)
 The main entry point (`scraper.py`) that coordinates the other four buckets.
 - **State Validation:** Runs `validate_state()` on startup to prune orphaned DB records (where the `.md` file was deleted by the user) or rebuild the DB entirely from `.md` files if the cache was lost.
-- **Job Loop:** Iterates through the jobs defined in `config.json`.
+- **Routine Loop:** Iterates through the routine defined in `config.yml`.
 - **Maturity Loop:** Queries the DB for posts where `rescrape_after` is past the current time, fetches them again, and triggers the Processor's update logic.
 - **Output Routing:** Detects whether a scraped post is new or "maturing" and routes it to the correct template behavior (writing a new file vs. regex-replacing the frontmatter and appending a `## Updated Comments` block).
 

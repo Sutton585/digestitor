@@ -6,7 +6,7 @@ Whether you are building a research database, feeding an AI agent, or just keepi
 ---
 
 ## 1. Installation & Quick Start
-To get started, clone the repository to your local machine. Since reddit2md uses only the Python standard library, you do not need to install any external packages. Simply run python reddit2md.py in your terminal. On the first run, if no config.json is found, the program will create a template for you. You can then edit this file to add your preferred subreddits and customize your settings.
+To get started, clone the repository to your local machine. Since reddit2md uses only the Python standard library, you do not need to install any external packages. Simply run python reddit2md.py in your terminal. On the first run, if no config.yml is found, the program will create a template for you. You can then edit this file to add your preferred subreddits and customize your settings.
 
 ### The Reliability Upgrade (Recommended)
 While reddit2md is designed to run with zero dependencies, Reddit's security measures occasionally block standard Python requests. For maximum reliability and to bypass 403 Forbidden errors, we highly recommend installing the requests library:
@@ -25,7 +25,7 @@ pip install requests
 reddit2md is designed to be agnostic. Every setting and feature is available with 100% parity across three interaction modes: the CLI, the config file, and as a Python resource.
 
 ### Using the Command Line Interface
-The CLI is the most common way to use reddit2md. You can run all configured scrape jobs by calling the script with no arguments. To scrape a specific subreddit on the fly (even if it is not in your config), use the --source argument followed by the subreddit name. For example:
+The CLI is the most common way to use reddit2md. You can run all configured scrape tasks by calling the script with no arguments. To scrape a specific subreddit on the fly (even if it is not in your config), use the --source argument followed by the subreddit name. For example:
 ```bash
 python reddit2md.py --source news --max-results 5 --detail XL --sort top --min-age-hours 24
 ```
@@ -35,32 +35,25 @@ You can import the RedditScraper class into your own projects. This is ideal for
 ```python
 from reddit2md import RedditScraper
 
-scraper = RedditScraper(config_path="config.json")
+scraper = RedditScraper(config_path="config.yml")
 scraper.run(source="Python", overrides={'max_results': 5, 'detail': 'XL'})
 ```
 
 ### Using the Configuration File
-The config.json file allows you to set global defaults and then define a list of specific "jobs" or tasks. This is the best way to manage a large list of scrape tasks for a daily digest. Note that you can have multiple jobs for the same subreddit with different settings.
-```json
-{
-    "global_defaults": {
-        "output_directory": "My Vault/Reddit", // Where your markdown ends up. Obsidian vault or wherever you want it.
-        "min_score": 50,
-        "data_directory": "data",
-        "group_by_source": true     // This will create subfolders for each subreddit
+The config.yml file allows you to set global defaults and then define a list of specific tasks in the routine. This is the best way to manage a large list of scrape tasks for a daily digest. Note that you can have multiple tasks for the same subreddit with different settings.
 
-    },
-    "jobs": [       // if the module is called without arguments, it will just run this job queue.
-        { 
-            "source": "MarvelComics",   // Subreddit that we are pulling from. In this case, r/MarvelComics
-            "sort": "top" 
-        },
-        { 
-            "source": "MarvelComics", 
-            "detail": "XL"              // How many comments do you want in your markdown file? T-shirt sizing from SX to XL
-        }
-    ]
-}
+```yaml
+global_defaults:
+  output_directory: "My Vault/Reddit"
+  min_score: 50
+  data_directory: "data"
+  group_by_source: true
+
+routine:
+  - source: "MarvelComics"
+    sort: "top"
+  - source: "MarvelComics"
+    detail: "XL"
 ```
 
 ---
