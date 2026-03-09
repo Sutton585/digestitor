@@ -17,11 +17,11 @@ class PostProcessor:
         'XL': None # Special handling for "XL"
     }
 
-    def __init__(self, db_manager=None, url_blacklist=None, comment_detail='MD'):
+    def __init__(self, db_manager=None, blacklist_urls=None, detail='MD'):
         self.db_manager = db_manager
-        self.url_blacklist = url_blacklist or []
-        self.comment_detail = comment_detail
-        self.comment_limits = self.COMMENT_PRESETS.get(comment_detail, self.COMMENT_PRESETS['MD'])
+        self.blacklist_urls = blacklist_urls or []
+        self.detail = detail
+        self.comment_limits = self.COMMENT_PRESETS.get(detail, self.COMMENT_PRESETS['MD'])
         
         # Initialize Theme Engine
         template_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates')
@@ -144,18 +144,18 @@ class PostProcessor:
     def generate_markdown(self, cleaned_post, rescrape_after=None, is_update=False):
         post_id = cleaned_post['id']
         selftext = cleaned_post['selftext']
-        subreddit_name = cleaned_post['source']
-        if subreddit_name.startswith('r/'):
-            subreddit_name = subreddit_name[2:]
+        source = cleaned_post['source']
+        if source.startswith('r/'):
+            source = source[2:]
         
         selftext = self.resolve_links(selftext)
 
         # Flair Logic
         flair_text = cleaned_post.get('label')
-        flair = "N/A"
+        label = "N/A"
         post_type = "reddit-thread"
         if flair_text:
-            flair = flair_text.split(':', 1)[0].strip() if ':' in flair_text else flair_text
+            label = flair_text.split(':', 1)[0].strip() if ':' in flair_text else flair_text
             if "Weekly" in flair_text:
                 post_type = 'megathread'
 
@@ -168,7 +168,7 @@ class PostProcessor:
         unique_urls = sorted(list(set(all_urls)))
         resolved_post_links = []
         for url in unique_urls:
-            if any(bl_item in url for bl_item in self.url_blacklist): continue
+            if any(bl_item in url for bl_item in self.blacklist_urls): continue
             reddit_id_match = re.search(self.REDDIT_PERMALINK_REGEX, url)
             if reddit_id_match and self.db_manager:
                 target_post_id = reddit_id_match.group(1)
@@ -189,7 +189,7 @@ class PostProcessor:
             'post_id': post_id,
             'score': cleaned_post['score'],
             'module': 'reddit2md',
-            'label': flair,
+            'label': label,
         }
         if rescrape_after: fm_data['rescrape_after'] = rescrape_after
         if resolved_post_links: fm_data['post_links'] = ", ".join(resolved_post_links)
@@ -204,7 +204,7 @@ class PostProcessor:
                 update_timestamp=datetime.now().strftime("%Y-%m-%d %H:%M"),
                 comments=comments_md
             )
-            return frontmatter_str, update_block, flair, subreddit_name
+            return frontmatter_str, update_block, label, source
         else:
             full_content = self.theme_engine.render('note',
                 frontmatter=frontmatter_str,
@@ -212,4 +212,4 @@ class PostProcessor:
                 content=selftext,
                 comments=comments_md
             )
-            return full_content, None, flair, subreddit_name
+            return full_content, None, label, source

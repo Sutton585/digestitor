@@ -47,7 +47,7 @@ class RedditScraper:
 
     def rebuild_db_from_markdown(self, output_dir):
         print(">>> Rebuilding database from individual Markdown files...")
-        processor = PostProcessor(self.db_manager, self.global_defaults['url_blacklist'])
+        processor = PostProcessor(self.db_manager, self.global_defaults['blacklist_urls'])
         rebuilt_count = 0
         
         for root, dirs, files in os.walk(output_dir):
@@ -64,7 +64,7 @@ class RedditScraper:
                     if self.db_manager.post_exists(post_id):
                         continue
                         
-                    flair = frontmatter.get('label', 'N/A')
+                    label = frontmatter.get('label', 'N/A')
                     author = frontmatter.get('poster', 'N/A')
                     subreddit = frontmatter.get('source', 'N/A')
                     score_str = frontmatter.get('score', '0')
@@ -89,7 +89,7 @@ class RedditScraper:
                     
                     # Add to DB (JSON dir is relative to data_dir)
                     self.db_manager.add_or_update_post(
-                        post_id, title, author, subreddit, flair, score, "rebuilt",
+                        post_id, title, author, subreddit, label, score, "rebuilt",
                         post_date, file_path, first_scrape=True, rescrape_after=rescrape_after
                     )
                     rebuilt_count += 1
@@ -119,12 +119,12 @@ class RedditScraper:
         else:
             print("  State is healthy.")
 
-    def run(self, subreddit_name=None, overrides=None):
+    def run(self, source=None, overrides=None):
         self.validate_state()
         
-        if subreddit_name:
+        if source:
             # Targeted ad-hoc job
-            job_conf = self.config_manager.get_adhoc_job_config(subreddit_name)
+            job_conf = self.config_manager.get_adhoc_job_config(source)
             jobs = [job_conf]
         else:
             # Process all jobs defined in config
@@ -146,7 +146,7 @@ class RedditScraper:
             if not self.debug and 'scrape_log_path' in job_config:
                 final_log_path = job_config['scrape_log_path']
             
-            if job_config.get('update_log', True):
+            if job_config.get('md_log', True):
                 any_log_update = True
 
             new_count, updated_count = self.execute_job(job_config)
@@ -157,8 +157,8 @@ class RedditScraper:
         maturing_posts = self.db_manager.get_maturing_posts()
         if maturing_posts:
             # If a specific subreddit was requested, only mature those
-            if subreddit_name:
-                maturing_posts = [p for p in maturing_posts if p['subreddit'].endswith(subreddit_name)]
+            if source:
+                maturing_posts = [p for p in maturing_posts if p['subreddit'].endswith(source)]
             
             for db_post in maturing_posts:
                 sub = db_post['subreddit']
@@ -169,7 +169,7 @@ class RedditScraper:
                 if overrides:
                     post_config.update({k: v for k, v in overrides.items() if v is not None})
                 
-                processor = PostProcessor(self.db_manager, post_config.get('url_blacklist', []), post_config.get('comment_detail', 'MD'))
+                processor = PostProcessor(self.db_manager, post_config.get('blacklist_urls', []), post_config.get('detail', 'MD'))
                 post_url = f"https://www.reddit.com{db_post['subreddit'] if db_post['subreddit'].startswith('/r/') else '/r/'+db_post['subreddit']}/comments/{db_post['id']}"
                 post_timestamp = datetime.fromisoformat(db_post['post_timestamp'])
                 
@@ -183,20 +183,20 @@ class RedditScraper:
         # Global DB pruning check (respecting the highest max_records in the current run)
         max_records = 1000
         for config in jobs:
-            max_records = max(max_records, config.get('max_db_records', 1000))
+            max_records = max(max_records, config.get('db_limit', 1000))
         self.db_manager.prune_old_records(max_records)
 
         print(f"\nFinished run. Total New: {new_posts_total}, Total Updated: {updated_posts_total}")
 
     def execute_job(self, config):
-        subreddit_name = config.get('name', config.get('subreddit', 'Unknown'))
+        source = config.get('source', config.get('source', 'Unknown'))
         sort = config.get('sort', 'new')
-        limit = config.get('post_limit', 8)
+        limit = config.get('max_results', 8)
         
-        rss_url = f"https://www.reddit.com/r/{subreddit_name}/{sort}/.rss"
-        print(f"\n>>> Executing Job: {subreddit_name} (Sort: {sort}, Limit: {limit})")
+        rss_url = f"https://www.reddit.com/r/{source}/{sort}/.rss"
+        print(f"\n>>> Executing Job: {source} (Sort: {sort}, Limit: {limit})")
         
-        processor = PostProcessor(self.db_manager, config.get('url_blacklist', []), config.get('comment_detail', 'MD'))
+        processor = PostProcessor(self.db_manager, config.get('blacklist_urls', []), config.get('detail', 'MD'))
         posts = self.client.get_posts_from_rss(rss_url, limit)
         
         new_count = 0
@@ -228,14 +228,14 @@ class RedditScraper:
         if db_post and db_post['file_path'] and os.path.exists(db_post['file_path']):
             frontmatter = processor.parse_frontmatter(db_post['file_path'])
             if frontmatter:
-                user_flair = frontmatter.get('label')
+                user_label = frontmatter.get('label')
                 user_rescrape = frontmatter.get('rescrape_after')
                 db_update_needed = False
-                current_flair = db_post['flair']
+                current_label = db_post['label']
                 current_rescrape = db_post['rescrape_after']
                 
-                if user_flair and user_flair != current_flair:
-                    current_flair = user_flair
+                if user_label and user_label != current_label:
+                    current_label = user_label
                     db_update_needed = True
                 
                 if current_rescrape and not user_rescrape:
@@ -246,7 +246,7 @@ class RedditScraper:
                 if db_update_needed:
                     self.db_manager.add_or_update_post(
                         post_id, db_post['title'], db_post['author'], db_post['subreddit'],
-                        current_flair, db_post['score'], db_post['sort_method'],
+                        current_label, db_post['score'], db_post['sort_method'],
                         db_post['post_timestamp'], db_post['file_path'],
                         first_scrape=False, rescrape_after=current_rescrape
                     )
@@ -262,10 +262,11 @@ class RedditScraper:
         score = post_item.get('score', 0)
         
         if score < config.get('min_score', 0):
+            print(f"  -> Skipped: Score {score} is below minimum threshold of {config.get('min_score', 0)}.")
             return False, False
             
         title = post_item.get('title', '')
-        if any(kw.lower() in title.lower() for kw in config.get('filter_keywords', [])):
+        if any(kw.lower() in title.lower() for kw in config.get('blacklist_terms', [])):
             return False, False
 
         cleaned_post = processor.clean_json(raw_post_data, post_date)
@@ -289,7 +290,7 @@ class RedditScraper:
                 json.dump(cleaned_post, f, indent=2)
 
         rescrape_after_iso = None
-        min_age_hours = config.get('min_post_age_hours', 12)
+        min_age_hours = config.get('min_age_hours', 12)
         if min_age_hours > 0:
             age = datetime.now(timezone.utc) - post_date
             if age < timedelta(hours=min_age_hours):
@@ -300,7 +301,7 @@ class RedditScraper:
         is_update = not first_scrape and db_post and db_post['file_path'] and os.path.exists(db_post['file_path'])
         
         if is_update:
-            new_frontmatter, update_block, flair, subreddit_name = processor.generate_markdown(cleaned_post, rescrape_after=rescrape_after_iso, is_update=True)
+            new_frontmatter, update_block, label, source = processor.generate_markdown(cleaned_post, rescrape_after=rescrape_after_iso, is_update=True)
             
             with open(db_post['file_path'], 'r', encoding='utf-8') as f:
                 content = f.read()
@@ -315,13 +316,13 @@ class RedditScraper:
                 f.write(updated_content)
             md_path = db_post['file_path']
         else:
-            markdown_content, _, flair, subreddit_name = processor.generate_markdown(cleaned_post, rescrape_after=rescrape_after_iso, is_update=False)
+            markdown_content, _, label, source = processor.generate_markdown(cleaned_post, rescrape_after=rescrape_after_iso, is_update=False)
             
             # Filename: [Subreddit]_[ID].md
-            md_filename = f"{subreddit_name}_{post_id}.md"
+            md_filename = f"{source}_{post_id}.md"
             
-            if config.get('generate_subreddit_folders', False):
-                md_path = os.path.join(active_output_dir, subreddit_name, md_filename)
+            if config.get('group_by_source', False):
+                md_path = os.path.join(active_output_dir, source, md_filename)
             else:
                 md_path = os.path.join(active_output_dir, md_filename)
             
@@ -332,7 +333,7 @@ class RedditScraper:
         # Database update is now mandatory for system logic
         self.db_manager.add_or_update_post(
             post_id, cleaned_post['title'], cleaned_post['poster'],
-            cleaned_post['source'], flair, score, config.get('sort', 'N/A'), post_date, md_path,
+            cleaned_post['source'], label, score, config.get('sort', 'N/A'), post_date, md_path,
             first_scrape=first_scrape, rescrape_after=rescrape_after_iso
         )
 
@@ -352,49 +353,49 @@ def main():
     parser = argparse.ArgumentParser(description="reddit2md v3.0: Granular Reddit-to-Markdown Scraper")
     parser.add_argument("--debug", type=str2bool, nargs='?', const=True, default=None, help="Enable/disable debug mode (local data output).")
     parser.add_argument("--config", default="config.json", help="Path to config file.")
-    parser.add_argument("--subreddit", help="Run an ad-hoc call for a specific subreddit (even if not in config).")
+    parser.add_argument("--source", help="Run an ad-hoc call for a specific subreddit (even if not in config).")
     
-    parser.add_argument("--limit", type=int, help="Override post limit.")
+    parser.add_argument("--max-results", type=int, help="Override post limit.")
     parser.add_argument("--min-score", type=int, help="Override min score.")
     parser.add_argument("--detail", choices=['XS', 'SM', 'MD', 'LG', 'XL'], help="Override comment detail.")
     parser.add_argument("--sort", choices=['new', 'hot', 'top', 'rising'], help="Override Reddit sorting.")
-    parser.add_argument("--age", type=int, help="Override min post age hours for re-scrape.")
-    parser.add_argument("--filter", help="Comma-separated keywords to filter from titles.")
-    parser.add_argument("--blacklist", help="Comma-separated URL fragments to ignore in story links.")
+    parser.add_argument("--min-age-hours", type=int, help="Override min post age hours for re-scrape.")
+    parser.add_argument("--blacklist-terms", help="Comma-separated keywords to filter from titles.")
+    parser.add_argument("--blacklist-urls", help="Comma-separated URL fragments to ignore in story links.")
     
     parser.add_argument("--data-dir", help="Consolidated directory for database and JSON archives.")
     parser.add_argument("--output-dir", help="Directory where Markdown files are saved.")
     parser.add_argument("--log-path", help="Path to the Scrape Log markdown file.")
-    parser.add_argument("--folders", type=str2bool, help="Whether to generate subreddit-specific folders.")
+    parser.add_argument("--group-by-source", type=str2bool, help="Whether to generate subreddit-specific folders.")
     
     parser.add_argument("--save-json", type=str2bool, help="Whether to save the sanitized JSON file.")
-    parser.add_argument("--update-log", type=str2bool, help="Whether to update the scrape log.")
-    parser.add_argument("--max-records", type=int, help="Maximum number of records to keep in the DB cache.")
+    parser.add_argument("--md-log", type=str2bool, help="Whether to update the scrape log.")
+    parser.add_argument("--db-limit", type=int, help="Maximum number of records to keep in the DB cache.")
     
     args = parser.parse_args()
 
     overrides = {
-        'post_limit': args.limit,
+        'max_results': args.max_results,
         'min_score': args.min_score,
-        'comment_detail': args.detail,
+        'detail': args.detail,
         'sort': args.sort,
-        'min_post_age_hours': args.age,
+        'min_age_hours': args.min_age_hours,
         'data_directory': args.data_dir,
         'output_directory': args.output_dir,
         'scrape_log_path': args.log_path,
-        'generate_subreddit_folders': args.folders,
+        'group_by_source': args.group_by_source,
         'save_json': args.save_json,
-        'update_log': args.update_log,
-        'max_db_records': args.max_records
+        'md_log': args.md_log,
+        'db_limit': args.db_limit
     }
     
-    if args.filter:
-        overrides['filter_keywords'] = [kw.strip() for kw in args.filter.split(',')]
-    if args.blacklist:
-        overrides['url_blacklist'] = [bl.strip() for bl in args.blacklist.split(',')]
+    if args.blacklist_terms:
+        overrides['blacklist_terms'] = [kw.strip() for kw in args.blacklist_terms.split(',')]
+    if args.blacklist_urls:
+        overrides['blacklist_urls'] = [bl.strip() for bl in args.blacklist_urls.split(',')]
 
     scraper = RedditScraper(config_path=args.config, debug=args.debug)
-    scraper.run(subreddit_name=args.subreddit, overrides=overrides)
+    scraper.run(source=args.source, overrides=overrides)
 
 
 if __name__ == "__main__":

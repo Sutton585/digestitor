@@ -25,9 +25,9 @@ pip install requests
 reddit2md is designed to be agnostic. Every setting and feature is available with 100% parity across three interaction modes: the CLI, the config file, and as a Python resource.
 
 ### Using the Command Line Interface
-The CLI is the most common way to use reddit2md. You can run all configured scrape jobs by calling the script with no arguments. To scrape a specific subreddit on the fly (even if it is not in your config), use the --subreddit argument followed by the subreddit name. For example:
+The CLI is the most common way to use reddit2md. You can run all configured scrape jobs by calling the script with no arguments. To scrape a specific subreddit on the fly (even if it is not in your config), use the --source argument followed by the subreddit name. For example:
 ```bash
-python reddit2md.py --subreddit news --limit 5 --detail XL --sort top --age 24
+python reddit2md.py --source news --max-results 5 --detail XL --sort top --min-age-hours 24
 ```
 
 ### Using as a Python Dependency
@@ -36,7 +36,7 @@ You can import the RedditScraper class into your own projects. This is ideal for
 from reddit2md import RedditScraper
 
 scraper = RedditScraper(config_path="config.json")
-scraper.run(subreddit_name="Python", overrides={'post_limit': 5, 'comment_detail': 'XL'})
+scraper.run(source="Python", overrides={'max_results': 5, 'detail': 'XL'})
 ```
 
 ### Using the Configuration File
@@ -44,18 +44,20 @@ The config.json file allows you to set global defaults and then define a list of
 ```json
 {
     "global_defaults": {
-        "output_directory": "My Vault/Reddit",
+        "output_directory": "My Vault/Reddit", // Where your markdown ends up. Obsidian vault or wherever you want it.
         "min_score": 50,
-        "data_directory": "data"
+        "data_directory": "data",
+        "group_by_source": true     // This will create subfolders for each subreddit
+
     },
-    "jobs": [
+    "jobs": [       // if the module is called without arguments, it will just run this job queue.
         { 
-            "name": "Python", 
+            "source": "MarvelComics",   // Subreddit that we are pulling from. In this case, r/MarvelComics
             "sort": "top" 
         },
         { 
-            "name": "Python", 
-            "comment_detail": "XL" 
+            "source": "MarvelComics", 
+            "detail": "XL"              // How many comments do you want in your markdown file? T-shirt sizing from SX to XL
         }
     ]
 }
@@ -68,7 +70,7 @@ To use reddit2md effectively, it is important to understand its foundational pil
 
 ### The Multi-Layer Source of Truth
 reddit2md uses a tripartite authority model to ensure data integrity:
-- Markdown Files (The Authority): The ultimate source of truth. If you edit the flair or rescrape_after date in your Obsidian note, the system detects this on the next run and updates the database. Deleting a note tells the system to forget the post entirely.
+- Markdown Files (The Authority): The ultimate source of truth. If you edit the label or rescrape_after date in your Obsidian note, the system detects this on the next run and updates the database. Deleting a note tells the system to forget the post entirely.
 - SQLite Database (The Memory): Acts as a high-speed cache and state-tracker. It handles the logic for maturity delays and history. The DB is self-healing—if deleted, it will automatically rebuild itself by scanning your Markdown folders.
 - JSON Archive (The Backup): Stores sanitized data for every scrape. This allows for a total vault rebuild without re-querying Reddit if your Markdown files are ever lost.
 
@@ -83,7 +85,7 @@ This allows you to track how discussions evolve over time within a single note.
 reddit2md is built for interconnected knowledge. If a scraped post or comment contains a URL to another Reddit thread that you have already scraped, the system automatically converts that URL into an internal Obsidian link (e.g., [[Python_1rm32fu]]). This allows you to navigate your research as a connected graph rather than a collection of isolated files.
 
 ### Context vs. Freshness: The Maturity Logic
-Scraping a thread the moment it is posted often misses the best discussion. reddit2md uses the min_post_age_hours setting to solve this. If a post is young, it is scraped immediately for freshness, but marked as Maturing. The system then automatically returns after the age threshold is met to append the final, mature conversation. Note: If you do not care about post maturity and want every scrape to be final, simply set min_post_age_hours to 0. This disables all re-scraping logic.
+Scraping a thread the moment it is posted often misses the best discussion. reddit2md uses the min_age_hours setting to solve this. If a post is young, it is scraped immediately for freshness, but marked as Maturing. The system then automatically returns after the age threshold is met to append the final, mature conversation. Note: If you do not care about post maturity and want every scrape to be final, simply set min_age_hours to 0. This disables all re-scraping logic.
 
 ### Safe Vault Coexistence & Sanitization
 To allow reddit2md notes to live alongside your existing research, the system uses a surgical ownership check. It only processes files where the post_id in the front-matter is present. This prevents the scraper from ever touching unrelated Markdown files in the same directory. 
@@ -118,9 +120,9 @@ Use this section as an encyclopedia for fine-tuning your data pipeline.
 
 ### Post Limit
 Description: The maximum number of new threads reddit2md will attempt to fetch from a subreddit feed during a single run.
-- Config: "post_limit": 8
-- CLI: --limit 8
-- Python: 'post_limit': 8
+- Config: "max_results": 8
+- CLI: --max-results 8
+- Python: 'max_results': 8
 
 ### Comment Detail Presets
 Description: Presets to control the exact volume and depth of comments captured. 
@@ -129,21 +131,21 @@ Description: Presets to control the exact volume and depth of comments captured.
 - MD (Default): Top 8 top-level comments, 2 replies each (Literal: 8 + 16 = 24 max).
 - LG: Top 10 top-level comments, 3 depth (3 replies, 1 sub-reply) (Literal: 10 + 30 + 30 = 70 max).
 - XL: No limits. Recursively captures every single comment and reply.
-- Config: "comment_detail": "MD"
+- Config: "detail": "MD"
 - CLI: --detail MD
-- Python: 'comment_detail': 'MD'
+- Python: 'detail': 'MD'
 
 ### Flair
 Description: Categorizes the post based on its source metadata.
-- Config: "flair": "Value"
-- CLI: --flair Value
-- Python: 'flair': 'Value'
+- Config: "label": "Value"
+- CLI: --label Value
+- Python: 'label': 'Value'
 
 ### Post Link
 Description: Metadata field for links to external URLs or internal Obsidian links to related scraped posts.
-- Config: "post_link": "URL"
-- CLI: --post-link URL
-- Python: 'post_link': 'URL'
+- Config: "post_links": "URL"
+- CLI: --post-links URL
+- Python: 'post_links': 'URL'
 
 ### Save JSON
 Description: Whether the sanitized JSON data fetched from Reddit is persisted to your data directory after the Markdown note is generated.
@@ -153,15 +155,15 @@ Description: Whether the sanitized JSON data fetched from Reddit is persisted to
 
 ### Update Scrape Log
 Description: Whether the human-readable Scrape Log.md dashboard is updated during the run.
-- Config: "update_log": true
-- CLI: --update-log [True/False]
-- Python: 'update_log': True
+- Config: "md_log": true
+- CLI: --md-log [True/False]
+- Python: 'md_log': True
 
 ### Maximum DB Records
 Description: Footprint control for the SQLite cache. When the DB exceeds this limit, the oldest records are pruned (does not touch Markdown files).
-- Config: "max_db_records": 1000
-- CLI: --max-records 1000
-- Python: 'max_db_records': 1000
+- Config: "db_limit": 1000
+- CLI: --db-limit 1000
+- Python: 'db_limit': 1000
 
 ### Reddit Sort Method
 Description: Choice of sort determines the flavor of your research: new (Default) for real-time tracking, hot for discovery, top for historical quality, or rising for momentum.
@@ -171,27 +173,27 @@ Description: Choice of sort determines the flavor of your research: new (Default
 
 ### Minimum Post Age Hours
 Description: The window of time a post must exist before it is considered mature. Set to 0 to disable re-scraping logic entirely.
-- Config: "min_post_age_hours": 12
-- CLI: --age 12
-- Python: 'min_post_age_hours': 12
+- Config: "min_age_hours": 12
+- CLI: --min-age-hours 12
+- Python: 'min_age_hours': 12
 
 ### Filter Keywords
 Description: Case-insensitive keywords. If any appear in a post title, the post is skipped.
-- Config: "filter_keywords": ["word1", "word2"]
-- CLI: --filter "word1, word2"
-- Python: 'filter_keywords': ["word1", "word2"]
+- Config: "blacklist_terms": ["word1", "word2"]
+- CLI: --blacklist-urls-terms "word1, word2"
+- Python: 'blacklist_terms': ["word1", "word2"]
 
 ### URL Blacklist
-Description: Prevents specific domains or fragments from being included in post_link metadata.
-- Config: "url_blacklist": ["fragment1", "fragment2"]
-- CLI: --blacklist "fragment1, fragment2"
-- Python: 'url_blacklist': ["fragment1", "fragment2"]
+Description: Prevents specific domains or fragments from being included in post_links metadata.
+- Config: "blacklist_urls": ["fragment1", "fragment2"]
+- CLI: --blacklist-urls "fragment1, fragment2"
+- Python: 'blacklist_urls': ["fragment1", "fragment2"]
 
 ### Subreddit Folders
 Description: Whether the system creates a sub-folder for each subreddit within your output directory.
-- Config: "generate_subreddit_folders": false
-- CLI: --folders [True/False]
-- Python: 'generate_subreddit_folders': False
+- Config: "group_by_source": false
+- CLI: --group-by-source [True/False]
+- Python: 'group_by_source': False
 
 ---
 

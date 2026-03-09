@@ -9,20 +9,20 @@ class Config:
             "data_directory": "data",
             "output_directory": "data/markdown",
             "scrape_log_path": "data/Scrape Log.md",
-            "min_post_age_hours": 12,
+            "min_age_hours": 12,
             "min_score": 50,
-            "post_limit": 8,
-            "comment_detail": "MD",
-            "generate_subreddit_folders": False,
+            "max_results": 8,
+            "detail": "MD",
+            "group_by_source": False,
             "save_json": True,
-            "update_log": True,
-            "max_db_records": 1000,
-            "filter_keywords": ["[Marvel Rewatch]", "Weekly Free Talk"],
-            "url_blacklist": ["reddit.com/r/marvelstudiosspoilers/wiki"]
+            "md_log": True,
+            "db_limit": 1000,
+            "blacklist_terms": ["[Marvel Rewatch]", "Weekly Free Talk"],
+            "blacklist_urls": ["reddit.com/r/marvelstudiosspoilers/wiki"]
         },
         "sources": [
             {
-                "name": "MarvelStudiosSpoilers",
+                "source": "MarvelStudiosSpoilers",
                 "sort": "new"
             }
         ]
@@ -68,9 +68,9 @@ class Config:
         """Returns a list of all fully-merged job configurations."""
         return [self.get_job_config(j) for j in self.get_jobs()]
 
-    def get_adhoc_job_config(self, subreddit_name):
+    def get_adhoc_job_config(self, source):
         """Creates a default job configuration for a subreddit not in the list."""
         global_defaults = self.get_global_defaults()
         config = global_defaults.copy()
-        config['name'] = subreddit_name
+        config['source'] = source
         return config

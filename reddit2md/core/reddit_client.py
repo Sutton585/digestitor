@@ -13,10 +13,8 @@ except ImportError:
 
 class RedditClient:
     HEADERS = {
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        'Referer': 'https://www.google.com/',
+        'User-Agent': 'python:sandman.reddit2md:v3.0 (by /u/sutton585)',
+        'Accept': 'application/json, text/plain, */*',
     }
 
     def _fetch_url(self, url):
