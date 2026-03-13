@@ -1,108 +1,230 @@
 # Configuration Reference
 
-This document serves as the encyclopedia for fine-tuning your data pipeline. You can use any of the below keys securely in your `config.yml` or through CLI arguments by converting snake_case parameter names to dash-case (e.g., `--ignore-older-than-hours`).
+Complete parameter encyclopedia for `reddit2md`. All parameters work identically across all three interfaces:
+- **`config.yml`** — use snake_case keys (e.g., `ignore_below_score`)
+- **CLI flags** — use dash-case (e.g., `--ignore-below-score`)
+- **Python overrides** — use snake_case dict keys (e.g., `{"ignore_below_score": 100}`)
 
 ---
 
-## System & Scrape Logistics
+## System & Output Settings
+
+### `md_output_directory`
+Path where Markdown files are written. Relative paths are resolved from the working directory.
+
+### `data_output_directory`
+Path where JSON files and the SQLite database are written.
+
+### `md_log`
+Path to the Markdown scrape log file. Set `enable_md_log: false` to disable it.
+
+### `save_md`
+`true` (default) / `false` — Toggle markdown file generation.
+
+### `save_json`
+`true` (default) / `false` — Toggle JSON file generation.
+
+### `detailed_db`
+`true` / `false` — When enabled, the SQLite database expands to store the full JSON payload per post (enables complex historical queries without touching files). Automatically enabled if `save_json` is `false` but scraping is active.
+
+### `track`
+`true` (default) / `false` — Set to `false` to disable all SQLite DB reads and writes entirely.
+
+### `db_limit`
+Max number of records to retain in the SQLite DB before pruning. The oldest records (and their associated JSON files) are deleted first. Default: `1000`.
+
+### `detail`
+Comment depth preset. Controls how many comments and replies are extracted:
+`XS` (none) → `SM` (top-level only) → `MD` (default) → `LG` → `XL` (full tree)
+
+### `verbose`
+Console output level:
+- `0` — Errors only
+- `1` — Progress summaries
+- `2` — Full debug output (default)
+
+### `group_by`
+Automatically organizes markdown output into subfolders based on a field in the post data. Can be set to any field name in the post JSON:
+
+```yaml
+group_by: subreddit    # → output/MarvelStudios/PostTitle_abc123.md
+group_by: author       # → output/username/PostTitle_abc123.md
+group_by: domain       # → output/youtube.com/PostTitle_abc123.md
+group_by: post_flair   # → output/Discussion/PostTitle_abc123.md
+```
+
+Set to `false` (or omit) for a flat output directory.
 
 ### `max_results`
-Maximum number of new threads reddit2md will process from the feed per run.
+Maximum number of posts to process per routine run. Default: `8`.
+
 ### `offset`
-Discards the first N results from the parsed Reddit RSS feed.
-### `verbose`
-Console output level. (0 = Errors, 1 = Progress, 2 = Debugging).
-### `save_json`
-Persists sanitized JSON data to your data directory after parsing.
-### `save_md`
-Generates human-readable Markdown files.
-### `detailed_db`
-Forces the SQLite database schema to expand and catch all JSON properties for headless querying. (Automatically enabled if `save_json` is false but the tool is actively scraping).
-### `db_limit`
-Maximum DB records to hold in SQLite before pruning. Acting as an active garbage collector, the system will delete the oldest associated `.json` files when pruning DB records.
-### `md_log`
-True/False toggle to append a human-readable run record in a `Scrape Log.md` file.
-### `track`
-Set this boolean to false to completely ignore reading and writing to the SQLite DB on runs.
-### `group_by_source`
-Sorts generated markdown into subdirectories based on their subreddit source.
-### `detail`
-Presets to control comment depth: (`XS`, `SM`, `MD` (Default), `LG`, `XL`).
+Skip the first N results from the Reddit feed before counting toward `max_results`.
 
 ---
 
-## URL Level Pre-Filtering Settings (Category 1 & 2)
+## Routine Configuration
 
-These settings interact directly with the Reddit API to filter results at the source.
+Routines are defined in `config.yml` under the `routine:` key. Each routine inherits all `settings:` values and can override any of them:
 
-### `source` / `sources`
-The subreddit(s). Lists of elements are joined via `+` in a single request.
+```yaml
+settings:
+  max_results: 10
+  sort: new
+
+routine:
+  - name: "tech-top"
+    subreddit: technology
+    sort: top              # overrides settings sort
+    timeframe: day
+
+  - name: "ml-search"
+    subreddit: MachineLearning
+    search: "transformer OR LLM"
+    max_results: 5         # overrides settings max_results
+```
+
+**`name`**: Optional. Gives the routine a name, shown in console output and used with `--routine`.
+
+**`subreddit`** / **`subreddits`**: The target subreddit(s). Both singular and plural are accepted:
+```yaml
+subreddit: Python
+subreddits:
+  - Python
+  - MachineLearning
+```
+
+---
+
+## Tier 1: Browse Parameters
+
+These use Reddit's fast, low-latency browse endpoint.
+
 ### `sort`
-The feed sort algorithm (`new`, `hot`, `top`, `rising`, `relevance`, `comments`).
-### `timeframe`
-A broad window restricting the posts returned (`hour`, `day`, `week`, `month`, `year`, `all`). Maps to Reddit's `t=` parameter across both browse and search endpoints.
-### `post_type`
-Limits either to `link` or `self` (text) posts.
-### `allow_nsfw`
-Enables the retrieval of maturely-filtered posts.
-### `nsfw_only`
-Forces the search feed to exclusively return NSFW-marked posts.
-### `spoiler`
-Forces the feed to exclusively return spoiler-marked posts.
-### `search`
-Freeform Reddit search queries (Lucene-style). See Advanced Querying section.
-### `title_search`
-Restricts keyword searching to exclusively target the post title.
-### `selftext`
-Restricts keyword searching to exclusively target the body content of a text post.
-### `author`
-Requires posts to be submitted by a comma-separated list of usernames.
-### `domain`
-Requires posts to link out to a specific domain (e.g., `youtube.com`).
-### `label`
-A partial match for matching flairs.
-### `label_exact`
-Matches flairs explicitly and directly.
+Feed sort order: `new` (default), `hot`, `top`, `rising`
 
-### URL Exclude Settings
-#### `exclude_label`
-Skips over posts carrying a specific list of flairs.
-#### `exclude_terms`
-Prevents posts mentioning specific words or keywords (AND explicitly drops them in the local ignore phase for optimal safety net verification).
-#### `exclude_urls`
-Drops posts linking out to specific websites/domains.
-#### `exclude_author`
-Prevents accounts (especially bots/Automods) from displaying in the return pool.
+> [!NOTE]
+> Using `relevance` or `comments` as sort values automatically forces the search endpoint.
+
+### `timeframe`
+Restricts results to a time window: `hour`, `day`, `week`, `month`, `year`, `all`.
+> Forces the search endpoint when used.
 
 ---
 
-## Local Ignore Settings (Category 3)
+## Tier 2: Search Parameters
 
-These settings filter posts *after* they are returned from Reddit, immediately triggering deep pagination to fulfill your `max_results` target.
+Using any of these causes reddit2md to switch to Reddit's advanced search API (`/search.rss`), which is more powerful but slower.
+
+### `search`
+Freeform Lucene-style query string. Passed directly to Reddit's search. See [Advanced Querying](#advanced-querying).
+
+### `author`
+Require posts submitted by a specific user or list of users.
+
+### `domain`
+Require posts that link to a specific domain (e.g., `domain: youtube.com`).
+
+### `selftext`
+Search within post body text (text posts only).
+
+### `title_search`
+Search within post titles only.
+
+### `flair_contains`
+Match posts whose flair **contains** the given word. Case-insensitive word match.
+
+```yaml
+flair_contains: Discussion   # matches [Weekly Discussion], [Discussion Thread], [Discussion]
+flair_contains:
+  - Discussion
+  - News               # OR logic — matches either word
+```
+
+> [!NOTE]
+> `flair_contains` uses Reddit's `flair:` search operator, which matches if the given word appears anywhere in the flair text. It is **not** a substring match — `flair_contains: Disc` will **not** match `[Discussion]`.
+
+### `flair`
+Match posts with an **exact, complete flair name**. Most useful with `sort: new` (uses the fast browse endpoint `f=flair_name:`), otherwise uses the search endpoint.
+
+```yaml
+flair: "Weekly Discussion"    # matches only posts with exactly this flair
+```
+
+### `exclude_flair`
+Exclude posts carrying a specific flair. Accepts a single value or list.
+
+### `nsfw_only`
+`true` / `false` — Return only NSFW-flagged posts.
+
+### `spoiler`
+`true` / `false` — Return only spoiler-flagged posts.
+
+### `allow_nsfw`
+`true` / `false` — When `false` (default), NSFW posts are filtered out at the URL level.
+
+---
+
+## Tier 3: Local Filters
+
+These run locally after Reddit returns the feed. When a post is rejected, reddit2md paginates deeper to fulfill `max_results` (up to 3 pages deep before giving up).
 
 ### `ignore_below_score`
-Drops posts from generating a markdown file if they don't meet an upvote count.
+Drop posts with fewer upvotes than this threshold.
+
 ### `ignore_below_upvote_ratio`
-Drops posts locally if their overall upvote percentage is below a threshold (e.g., `0.95` for 95%).
+Drop posts with a lower upvote percentage (e.g., `0.85` = 85%). Useful for filtering out controversial posts.
+
 ### `ignore_below_comments`
-Drops posts locally if they have fewer than a threshold of comments at time of scrape.
+Drop posts with fewer comments than this threshold.
+
+### `ignore_older_than_hours` / `ignore_older_than_days`
+Drop posts older than this age.
+
+### `ignore_newer_than_hours` / `ignore_newer_than_days`
+Drop posts younger than this age. Useful for waiting until a post has accumulated discussion.
+
+### `exclude_terms`
+Drop posts whose title contains any of the specified keywords. Accepts a single string or list.
+
+### `exclude_author`
+Drop posts from specific users (bots, automods, etc.). Accepts a single string or list.
+
+### `exclude_urls`
+Drop posts whose source URL is in this list (does not affect extracting links from the post body).
+
 ### `ignore_urls`
-Explicitly removes specific URLs from saving inside the markdown `post_links` array output section (Does not filter out the *post itself* from retrieving).
-### `ignore_older_than_hours` / `_days`
-Discards posts locally if they are older than the threshold setting.
-### `ignore_newer_than_hours` / `_days`
-Discards posts locally if they are younger than the threshold setting.
-### `rescrape_newer_than_hours` / `_days`
-The primary maturity logic controller. Creates the file but queues it in the database tracking loop to be retrieved again after the provided timespan.
+Removes specific URLs from the `post_links` array inside each output file. Does **not** filter out the post itself.
 
 ---
 
-## Advanced Querying Syntax
+## Rescraping & Maturity Logic
 
-When utilizing the Advanced Query Parameters, reddit2md builds your criteria directly into the RSS URL using `exclude_` and `search` parameters.
+### `rescrape_newer_than_hours` / `rescrape_newer_than_days`
+The primary maturity controller. Posts younger than this threshold are scraped but flagged in the DB to be revisited on a future run once they've matured.
 
-### Search Field Operators
-The `search` (formerly query) parameter supports full Lucene-style Reddit search syntax injected completely raw into the URL.
+**The full maturity workflow:**
+
+```yaml
+subreddit: marvelstudios
+timeframe: day                    # Reddit returns posts from past 24h
+ignore_newer_than_hours: 20       # Discard posts under 20h old (too fresh for discussion)
+rescrape_newer_than_hours: 24     # Everything that survives gets a rescrape mark
+```
+
+1. Reddit returns posts from the last 24 hours.
+2. Posts under 20h old are discarded — not scraped, not tracked.
+3. Posts in the 20–24h window are scraped and queued for rescraping.
+4. On the next run, mature posts are revisited and their updated comments are appended to the Markdown file.
+
+> [!TIP]
+> Set `rescrape_newer_than_hours: 0` or omit it entirely if you don't need post maturity tracking.
+
+---
+
+## Advanced Querying
+
+The `search` parameter supports Reddit's full Lucene-style syntax:
 
 | Operator | Example | Effect |
 |---|---|---|
@@ -110,24 +232,89 @@ The `search` (formerly query) parameter supports full Lucene-style Reddit search
 | `" "` (quotes) | `"spider-man"` | Exact phrase match |
 | `title:` | `title:announcement` | Search post titles only |
 | `site:` | `site:youtube.com` | Filter by linked domain |
+| `selftext:` | `selftext:tutorial` | Search post body text |
+| `author:` | `author:spez` | Filter by author |
 
 ---
 
-## Context vs. Freshness: The Post Age and Maturity Logic
+## System Fields (Read-Only)
 
-Scraping a thread the moment it is posted often misses the best discussion. reddit2md allows you to implement precise age filtering thresholds to guarantee fresh scrapes or deep, mature discussions. This is best illustrated via the interaction between the three time-based configuration parameters.
+These fields are automatically populated in the JSON output and SQLite database. They are not user-configurable.
 
-```yaml
-source: marvelstudios
-timeframe: day                    # t=day in URL — Reddit returns posts from past 24h only
-ignore_newer_than_hours: 20       # Category 3 local — discard anything under 20h old
-rescrape_newer_than_hours: 24     # Category 3 local — anything under 24h old gets a rescrape mark
-```
+### `ingestion_history`
+A JSON array logging every query that has ever touched this post. Each entry contains:
+- `type`: `"initial"` (first scrape), `"rescrape"` (re-scraped after maturity), or `"hit"` (query returned this post but it didn't need re-scraping)
+- `timestamp`: UTC ISO timestamp
+- `query`: The full configuration parameters used for that run
 
-What happens step by step:
-1. URL is built with `t=day` — Reddit returns up to 25 posts from the past 24 hours.
-2. Local Ignore: any post younger than 20 hours is discarded entirely — not scraped, not tracked. Since this is a Category 3 filter, scraping a lot of recent posts will trigger deep pagination to fulfill the target limit.
-3. Local Rescrape check: every surviving post is over 20 hours old, which is under the `rescrape_newer_than` threshold of 24 hours, so every single surviving post gets a rescrape mark tracking it in the SQLite DB.
-4. On the next run after maturity, those posts are revisited and the mature discussion is appended to the markdown files.
+This provides a full audit trail for understanding which queries produce which content.
 
-Net effect: you collect only posts in the 20h–24h window, and you automatically return to all of them when they mature. No manual tracking needed. (Note: If you do not care about post maturity and want every scrape to be final, you can explicitly set `rescrape_newer_than_hours` to `0` or leave it unset outright).
+---
+
+## Aliases (Backward Compatibility)
+
+| Config key | Canonical key | Notes |
+|---|---|---|
+| `subreddits` | `subreddit` | Natural plural form, fully supported |
+| `label` | `flair_contains` | Old partial flair param |
+| `flair_exact`, `label_exact`, `exact_flair` | `flair` | Old exact flair param |
+| `exclude_label` | `exclude_flair` | Old exclude flair param |
+| `query` | `search` | Old search param alias |
+| `exclude_authors` | `exclude_author` | Plural alias |
+| `max_age_hours` | `ignore_older_than_hours` | Old age filter alias |
+| `min_age_hours` | `ignore_newer_than_hours` | Old freshness filter alias |
+
+---
+
+## Markdown Templates
+
+`reddit2md` allows you to customize the structural output of your Markdown files using a logic-free template system based on Python's `string.Template`.
+
+### Template Files
+Located in `reddit2md/templates/`:
+- **`post.template`**: Dictates the main Markdown file (Frontmatter + Post Body).
+- **`comment.template`**: Dictates the layout of a single comment and its recursive tree of replies. 
+- **`update.template`**: Dictates the block appended to a post when it is rescraped for more discussion.
+
+### Syntax
+Templates use the `${variable_name}` placeholder syntax. If a variable is missing or empty, the placeholder is safely removed during rendering.
+
+### Available Variables
+
+#### `post.template`
+| Variable | Description |
+|---|---|
+| `${post_id}` | Reddit's unique alphanumeric ID for the thread |
+| `${title}` | The post title |
+| `${selftext}` | The body content of the post |
+| `${poster}` | The author's username |
+| `${source}` | The subreddit community name |
+| `${post_flair}` | The post's flair/label |
+| `${score}` | Net upvotes |
+| `${upvote_ratio}` | Percentage of upvotes (e.g., `0.95`) |
+| `${num_comments}` | Total comment count |
+| `${domain}` | The out-link domain (e.g., `github.com`) |
+| `${permalink}` | The relative URL path to the Reddit thread |
+| `${is_nsfw}` | `True` or `False` |
+| `${over_18}` | `True` or `False` (alias for maturity) |
+| `${date_created}` | Submission date (`YYYY-MM-DD HH:MM`) |
+| `${date_scraped}` | Script execution date (`YYYY-MM-DD HH:MM`) |
+| `${comment_section}` | The macro where all comments are rendered |
+| `${update_section}` | The macro where maturity update blocks are placed |
+| `${rescrape_after}` | The frontmatter field for maturity tracking |
+| `${post_links}` | A list of resolved Obsidian internal links or external URLs |
+
+#### `comment.template`
+| Variable | Description |
+|---|---|
+| `${author}` | The comment author |
+| `${score}` | Net upvotes for the comment |
+| `${body}` | The comment text |
+| `${indent}` | Automatically handles tab spacing for matching thread depth |
+| `${replies}` | The macro where child comments are recursively rendered |
+
+#### `update.template`
+| Variable | Description |
+|---|---|
+| `${update_timestamp}` | The date/time of the rescrape |
+| `${comments}` | The entire new comment tree block |

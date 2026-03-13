@@ -12,7 +12,7 @@ class Config:
             "max_results": 8,
             "detail": "MD",
             "verbose": 2,
-            "group_by_source": False,
+            "group_by": False,
             "save_json": True,
             "enable_md_log": True,
             "db_limit": 1000,
@@ -28,9 +28,9 @@ class Config:
 
             # URL-level, forces q= (exclude group)
             "search": None,
-            "label": None,
-            "label_exact": None,
-            "exclude_label": [],
+            "flair_contains": None,      # Word-within-flair match (Reddit flair: operator)
+            "flair": None,               # Exact full flair name match (Reddit flair_name: operator)
+            "exclude_flair": [],
             "exclude_terms": ["[Marvel Rewatch]", "Recurring Free Talk"],
             "exclude_urls": [],
             "exclude_author": [],
@@ -57,7 +57,7 @@ class Config:
         },
         "routine": [
             {
-                "source": "MarvelStudiosSpoilers",
+                "subreddit": "MarvelStudiosSpoilers",
                 "sort": "new"
             }
         ]
@@ -88,38 +88,43 @@ class Config:
     def get_settings(self):
         return self.data.get('settings', self.DEFAULT_CONFIG['settings'])
 
-    def get_routine(self):
-        """Returns the raw list of scrape routines from the config."""
-        # Fallback to 'jobs' or 'sources' if people haven't updated yet, but prefer 'routine'
-        return self.data.get('routine', self.data.get('jobs', self.data.get('sources', self.DEFAULT_CONFIG['routine'])))
+    def get_routines(self):
+        """Returns the raw list of routines from the config."""
+        # Fallback to legacy block names if people haven't updated yet
+        return self.data.get('routine', self.data.get('routines', self.data.get('scrape_jobs', self.data.get('jobs', self.DEFAULT_CONFIG['routine']))))
 
     def get_routine_config(self, routine_data):
-        """Merges global defaults with a specific routine's overrides, and normalizes aliases."""
+        """Merges global defaults with a specific scrape job's overrides, and normalizes aliases."""
         settings = self.get_settings()
         config = settings.copy()
         config.update(routine_data)
 
-        # 1. Source aliases
-        for alias in ['sources', 'subreddit', 'subreddits', 'reddit', 'reddits']:
+        # 1. Subreddit aliases
+        # NOTE: 'source'/'sources' are intentionally NOT aliased here anymore.
+        # 'source' now refers to the platform itself (e.g. "reddit"), not a subreddit.
+        # 'subreddits' (plural) is kept as a natural alias for multi-subreddit configs.
+        for alias in ['subreddits']:
             if alias in config:
-                if 'source' not in config: config['source'] = config[alias]
+                if 'subreddit' not in config: config['subreddit'] = config[alias]
                 del config[alias]
                 
-        # 2. label/flair
-        if 'flair' in config:
-            if 'label' not in config or not config['label']: config['label'] = config['flair']
-            del config['flair']
+        # 2. flair_contains aliases (partial/word-match)
+        # 'label' was the old name for flair_contains
+        if 'label' in config:
+            if 'flair_contains' not in config or not config['flair_contains']: config['flair_contains'] = config['label']
+            del config['label']
 
-        # 3. label_exact/flair_exact (and old exact_flair fix)
-        for alias in ['flair_exact', 'exact_flair']:
+        # 3. flair (exact full-name match) aliases
+        # Old names: flair_exact, label_exact, exact_flair
+        for alias in ['flair_exact', 'label_exact', 'exact_flair']:
             if alias in config:
-                if 'label_exact' not in config or not config['label_exact']: config['label_exact'] = config[alias]
+                if 'flair' not in config or not config['flair']: config['flair'] = config[alias]
                 del config[alias]
 
-        # 4. exclude_label/exclude_flair
-        if 'exclude_flair' in config:
-            if 'exclude_label' not in config or not config['exclude_label']: config['exclude_label'] = config['exclude_flair']
-            del config['exclude_flair']
+        # 4. exclude_flair
+        if 'exclude_label' in config:
+            if 'exclude_flair' not in config or not config['exclude_flair']: config['exclude_flair'] = config['exclude_label']
+            del config['exclude_label']
 
         # 5. exclude_terms & blacklists
         for alias in ['exclude', 'excludes', 'exclude_term', 'blacklist', 'blacklist_terms', 'blacklist_term', 'blacklists']:
@@ -178,7 +183,7 @@ class Config:
             del config['query']
 
         # 16. List normalizations
-        list_keys = ['label', 'exclude_label', 'exclude_terms', 'exclude_urls', 'exclude_author', 'ignore_urls', 'author', 'domain', 'selftext', 'title_search']
+        list_keys = ['flair', 'flair_contains', 'exclude_flair', 'exclude_terms', 'exclude_urls', 'exclude_author', 'ignore_urls', 'author', 'domain', 'selftext', 'title_search']
         for k in list_keys:
             if k in config:
                 if isinstance(config[k], str):
@@ -189,12 +194,12 @@ class Config:
         return config
 
     def get_all_routine_configs(self):
-        """Returns a list of all fully-merged configurations in the routine."""
-        return [self.get_routine_config(t) for t in self.get_routine()]
+        """Returns a list of all fully-merged configurations in the routine list."""
+        return [self.get_routine_config(t) for t in self.get_routines()]
 
-    def get_adhoc_routine_config(self, source):
-        """Creates a default configuration for a source not in the regular routine list."""
+    def get_adhoc_routine_config(self, subreddit):
+        """Creates a default configuration for a subreddit not in the regular list."""
         settings = self.get_settings()
         config = settings.copy()
-        config['source'] = source
+        config['subreddit'] = subreddit
         return config

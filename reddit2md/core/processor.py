@@ -31,15 +31,15 @@ class PostProcessor:
         post_data = raw_post_data[0]['data']['children'][0]['data']
         comments_data = raw_post_data[1]['data']['children']
 
-        source = post_data.get('subreddit_name_prefixed', '')
-        if source.startswith('r/'):
-            source = source[2:]
+        subreddit = post_data.get('subreddit_name_prefixed', '')
+        if subreddit.startswith('r/'):
+            subreddit = subreddit[2:]
 
         cleaned_post = {
             'post_id': post_data.get('id'),
             'title': post_data.get('title'),
-            'poster': post_data.get('author'),
-            'source': source,
+            'author': post_data.get('author'),
+            'subreddit': subreddit,
             'permalink': post_data.get('permalink'),
             'selftext': post_data.get('selftext', ''),
             'score': post_data.get('score', 0),
@@ -169,7 +169,7 @@ class PostProcessor:
     def generate_markdown(self, cleaned_post, rescrape_after=None, is_update=False):
         post_id = cleaned_post['post_id']
         selftext = cleaned_post['selftext']
-        source = cleaned_post['source']
+        subreddit = cleaned_post['subreddit']
         
         # Format dates for template injection
         cleaned_post['date_created'] = datetime.fromtimestamp(cleaned_post['created_utc']).strftime("%Y-%m-%d %H:%M")
@@ -200,7 +200,7 @@ class PostProcessor:
                 target_post_id = reddit_id_match.group(1)
                 target_post = self.db_manager.get_post(target_post_id)
                 if target_post:
-                    target_sub = target_post['source'][2:] if target_post['source'].startswith('r/') else target_post['source']
+                    target_sub = target_post['subreddit'][2:] if target_post['subreddit'].startswith('r/') else target_post['subreddit']
                     resolved_post_links.append(f"[[{target_sub}_{target_post_id}]]")
                     continue
             resolved_post_links.append(url)
@@ -219,9 +219,9 @@ class PostProcessor:
             )
             # The python logic now natively expects the update block to be appended by the orchestrator
             # We no longer hardcode frontmatter building natively here. 
-            return None, update_block, label, source
+            return None, update_block, label, subreddit
         else:
             # Generate full note using the expanded payload dict
             cleaned_post['update_section'] = "" # Blank out update macro on new creations
             full_content = self.theme_engine.render('post', **cleaned_post)
-            return full_content, None, label, source
+            return full_content, None, label, subreddit

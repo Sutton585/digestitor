@@ -34,7 +34,8 @@ class DatabaseManager:
                     is_gallery BOOLEAN,
                     post_flair TEXT,
                     selftext_snippet TEXT,
-                    comments_dump TEXT
+                    comments_dump TEXT,
+                    ingestion_history TEXT
                 )
             ''')
             # Schema Migration & Verification
@@ -44,8 +45,9 @@ class DatabaseManager:
             if 'project' in columns and 'label' not in columns:
                 cursor.execute("ALTER TABLE posts RENAME COLUMN project TO label")
             
-            if 'subreddit' in columns and 'source' not in columns:
-                cursor.execute("ALTER TABLE posts RENAME COLUMN subreddit TO source")
+            # Rename 'source' -> 'subreddit' for DBs created before the nomenclature refactor
+            if 'source' in columns and 'subreddit' not in columns:
+                cursor.execute("ALTER TABLE posts RENAME COLUMN source TO subreddit")
             
             if 'score' not in columns:
                 cursor.execute("ALTER TABLE posts ADD COLUMN score INTEGER")
@@ -73,6 +75,8 @@ class DatabaseManager:
                 cursor.execute("ALTER TABLE posts ADD COLUMN selftext_snippet TEXT")
             if 'comments_dump' not in columns:
                 cursor.execute("ALTER TABLE posts ADD COLUMN comments_dump TEXT")
+            if 'ingestion_history' not in columns:
+                cursor.execute("ALTER TABLE posts ADD COLUMN ingestion_history TEXT")
             conn.commit()
 
     def post_exists(self, post_id):
@@ -88,7 +92,7 @@ class DatabaseManager:
             cursor.execute('SELECT * FROM posts WHERE id = ?', (post_id,))
             return cursor.fetchone()
 
-    def add_or_update_post(self, post_id, title, author, source, label, score, sort_method, post_timestamp, file_path, first_scrape=True, rescrape_after=None, json_path=None, ignored_reason=None, detailed_data=None):
+    def add_or_update_post(self, post_id, title, author, source, label, score, sort_method, post_timestamp, file_path, first_scrape=True, rescrape_after=None, json_path=None, ignored_reason=None, detailed_data=None, ingestion_history=None):
         now = datetime.now()
         d = detailed_data or {}
         
@@ -96,12 +100,12 @@ class DatabaseManager:
             cursor = conn.cursor()
             if first_scrape:
                 cursor.execute('''
-                    INSERT INTO posts (id, title, author, source, label, score, sort_method, post_timestamp, first_scrape_timestamp, last_scrape_timestamp, rescrape_after, file_path, json_path, ignored_reason, upvote_ratio, num_comments, domain, is_nsfw, is_video, is_gallery, post_flair, selftext_snippet, comments_dump)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO posts (id, title, author, subreddit, label, score, sort_method, post_timestamp, first_scrape_timestamp, last_scrape_timestamp, rescrape_after, file_path, json_path, ignored_reason, upvote_ratio, num_comments, domain, is_nsfw, is_video, is_gallery, post_flair, selftext_snippet, comments_dump, ingestion_history)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(id) DO UPDATE SET
                         title=excluded.title,
                         author=excluded.author,
-                        source=excluded.source,
+                        subreddit=excluded.subreddit,
                         label=excluded.label,
                         score=excluded.score,
                         sort_method=excluded.sort_method,
@@ -119,13 +123,14 @@ class DatabaseManager:
                         is_gallery=excluded.is_gallery,
                         post_flair=excluded.post_flair,
                         selftext_snippet=excluded.selftext_snippet,
-                        comments_dump=excluded.comments_dump
+                        comments_dump=excluded.comments_dump,
+                        ingestion_history=excluded.ingestion_history
                 ''', (post_id, title, author, source, label, score, sort_method, post_timestamp, now, now, rescrape_after, file_path, json_path, ignored_reason,
-                      d.get('upvote_ratio'), d.get('num_comments'), d.get('domain'), d.get('is_nsfw'), d.get('is_video'), d.get('is_gallery'), d.get('post_flair'), d.get('selftext_snippet'), d.get('comments_dump')))
+                      d.get('upvote_ratio'), d.get('num_comments'), d.get('domain'), d.get('is_nsfw'), d.get('is_video'), d.get('is_gallery'), d.get('post_flair'), d.get('selftext_snippet'), d.get('comments_dump'), ingestion_history))
             else:
                 cursor.execute('''
                     UPDATE posts SET
-                        title = ?, author = ?, source = ?, label = ?, score = ?, sort_method = ?, post_timestamp = ?,
+                        title = ?, author = ?, subreddit = ?, label = ?, score = ?, sort_method = ?, post_timestamp = ?,
                         last_scrape_timestamp = ?, rescrape_after = ?, file_path = ?, json_path = ?, ignored_reason = ?,
                         upvote_ratio = COALESCE(?, upvote_ratio),
                         num_comments = COALESCE(?, num_comments),
@@ -135,10 +140,11 @@ class DatabaseManager:
                         is_gallery = COALESCE(?, is_gallery),
                         post_flair = COALESCE(?, post_flair),
                         selftext_snippet = COALESCE(?, selftext_snippet),
-                        comments_dump = COALESCE(?, comments_dump)
+                        comments_dump = COALESCE(?, comments_dump),
+                        ingestion_history = COALESCE(?, ingestion_history)
                     WHERE id = ?
                 ''', (title, author, source, label, score, sort_method, post_timestamp, now, rescrape_after, file_path, json_path, ignored_reason,
-                      d.get('upvote_ratio'), d.get('num_comments'), d.get('domain'), d.get('is_nsfw'), d.get('is_video'), d.get('is_gallery'), d.get('post_flair'), d.get('selftext_snippet'), d.get('comments_dump'), post_id))
+                      d.get('upvote_ratio'), d.get('num_comments'), d.get('domain'), d.get('is_nsfw'), d.get('is_video'), d.get('is_gallery'), d.get('post_flair'), d.get('selftext_snippet'), d.get('comments_dump'), ingestion_history, post_id))
             conn.commit()
 
     def get_all_posts(self):
@@ -223,8 +229,8 @@ class DatabaseManager:
                     status = "🔄 *Pending*"
                     rescrape_display = "**Ready Now**"
 
-            # Filename logic: [Source]_[ID].md
-            source_clean = p['source'][2:] if p['source'].startswith('r/') else p['source']
+            # Filename logic: [Subreddit]_[ID].md
+            source_clean = p['subreddit'][2:] if p['subreddit'].startswith('r/') else p['subreddit']
             filename = f"{source_clean}_{p['id']}.md"
             title_link = f"[[{filename}|{p['title']}]]" if p['file_path'] else p['title']
             

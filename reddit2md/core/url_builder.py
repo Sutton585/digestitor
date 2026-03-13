@@ -20,36 +20,24 @@ class URLBuilder:
 
     BASE = "https://www.reddit.com"
 
-    def build_rss_url(
-        self,
-        source=None,
-        sort="new",
-        timeframe=None,
-        post_type=None,
-        allow_nsfw=False,
-        label=None,
-        label_exact=None,
-        exclude_label=None,
-        exclude_terms=None,
-        exclude_urls=None,
-        exclude_author=None,
-        author=None,
-        domain=None,
-        selftext=None,
-        title_search=None,
-        nsfw_only=False,
-        spoiler=False,
-        search=None,
-        **kwargs  # absorbs all other config keys safely
+    def build_rss_url(self, subreddit=None, sort='new', timeframe=None,
+                      post_type=None, allow_nsfw=False,
+                      flair_contains=None, flair=None,
+                      exclude_flair=None, exclude_terms=None,
+                      exclude_urls=None, exclude_author=None,
+                      author=None, domain=None, selftext=None, title_search=None,
+                      nsfw_only=False, spoiler=False, search=None,
+                      **kwargs  # absorbs all other config keys safely
     ):
         """
         Build a Reddit RSS URL from task configuration parameters.
         """
-        source_str = self._normalize_source(source)
+        subreddit_str = self._normalize_source(subreddit)
 
         is_search_sort = sort in ("relevance", "comments")
-        has_q_params = any([label, exclude_label, exclude_terms, exclude_urls, exclude_author, author, domain, selftext, title_search, nsfw_only, spoiler, search])
-        has_exact_flair_search = label_exact and sort != "new"
+        has_q_params = any([flair_contains, exclude_flair, exclude_terms, exclude_urls, exclude_author, author, domain, selftext, title_search, nsfw_only, spoiler, search])
+        # flair (exact) forces search endpoint unless sort=new (where browse f= param works)
+        has_exact_flair_search = flair and sort != "new"
 
         needs_search = any([
             is_search_sort,
@@ -60,22 +48,22 @@ class URLBuilder:
             allow_nsfw is True
         ])
 
-        if not needs_search and label_exact and sort == "new":
-            # BROWSE endpoint with f=flair_name:
-            return self._build_browse_url_with_flair(source_str, sort, label_exact)
+        if not needs_search and flair and sort == "new":
+            # BROWSE endpoint with f=flair_name: for exact flair + new sort (fastest path)
+            return self._build_browse_url_with_flair(subreddit_str, sort, flair)
 
         if not needs_search:
-            return self._build_browse_url(source_str, sort)
+            return self._build_browse_url(subreddit_str, sort)
 
         return self._build_search_url(
-            source_str=source_str,
+            subreddit_str=subreddit_str,
             sort=sort,
             timeframe=timeframe,
             post_type=post_type,
             allow_nsfw=allow_nsfw,
-            label=label,
-            label_exact=label_exact if has_exact_flair_search else None,
-            exclude_label=exclude_label,
+            flair_contains=flair_contains,
+            flair=flair if has_exact_flair_search else None,
+            exclude_flair=exclude_flair,
             exclude_terms=exclude_terms,
             exclude_urls=exclude_urls,
             exclude_author=exclude_author,
@@ -92,41 +80,44 @@ class URLBuilder:
     # Private helpers
     # -------------------------------------------------------------------------
 
-    def _normalize_source(self, source):
-        if not source or str(source).lower() in ("all", "none", ""):
+    def _normalize_source(self, subreddit):
+        if not subreddit or str(subreddit).lower() in ("all", "none", ""):
             return None
-        if isinstance(source, list):
-            parts = [s.strip() for s in source if s.strip()]
+        if isinstance(subreddit, list):
+            parts = [s.strip() for s in subreddit if s.strip()]
             return "+".join(parts) if parts else None
-        return str(source).strip() or None
+        return str(subreddit).strip() or None
 
-    def _build_browse_url(self, source_str, sort):
-        if source_str:
-            return f"{self.BASE}/r/{source_str}/{sort}/.rss"
+    def _build_browse_url(self, subreddit_str, sort):
+        if subreddit_str:
+            return f"{self.BASE}/r/{subreddit_str}/{sort}/.rss"
         else:
             return f"{self.BASE}/{sort}/.rss"
 
-    def _build_browse_url_with_flair(self, source_str, sort, label_exact):
-        base = self._build_browse_url(source_str, sort)
-        return f"{base}?f=flair_name%3A%22{label_exact}%22"
+    def _build_browse_url_with_flair(self, subreddit_str, sort, flair):
+        # flair here is the EXACT full flair name — uses f=flair_name: browse param
+        base = self._build_browse_url(subreddit_str, sort)
+        return f"{base}?f=flair_name%3A%22{flair}%22"
 
     def _build_q_string(
-        self, label, label_exact, exclude_label, exclude_terms, exclude_urls, exclude_author, author, domain, selftext, title_search, nsfw_only, spoiler, search
-    ):
-        q_parts = []
+        self, flair_contains, flair, exclude_flair, exclude_terms, exclude_urls, exclude_author, author, domain, selftext, title_search, nsfw_only, spoiler, search
+    ) -> str:
+        q_parts: list[str] = []
 
-        if label:
-            if isinstance(label, list):
-                terms = " OR ".join(f'"{l}"' for l in label)
+        # flair_contains: word-within-flair match via Reddit's flair: search operator
+        if flair_contains:
+            if isinstance(flair_contains, list):
+                terms = " OR ".join(f'"{l}"' for l in flair_contains)
                 q_parts.append(f"flair:({terms})")
             else:
-                q_parts.append(f'flair:"{label}"')
+                q_parts.append(f'flair:"{flair_contains}"')
 
-        if label_exact:
-            q_parts.append(f'flair_name:"{label_exact}"')
+        # flair: exact full flair name match via Reddit's flair_name: operator
+        if flair:
+            q_parts.append(f'flair_name:"{flair}"')
 
-        if exclude_label:
-            for el in (exclude_label if isinstance(exclude_label, list) else [exclude_label]):
+        if exclude_flair:
+            for el in (exclude_flair if isinstance(exclude_flair, list) else [exclude_flair]):
                 q_parts.append(f'NOT flair:"{el}"')
 
         if exclude_terms:
@@ -172,17 +163,17 @@ class URLBuilder:
             return " AND ".join(q_parts)
 
     def _build_search_url(
-        self, source_str, sort, timeframe, post_type, allow_nsfw,
-        label, label_exact, exclude_label, exclude_terms, exclude_urls, exclude_author, author, domain, selftext, title_search, nsfw_only, spoiler, search
+        self, subreddit_str, sort, timeframe, post_type, allow_nsfw,
+        flair, flair_exact, exclude_flair, exclude_terms, exclude_urls, exclude_author, author, domain, selftext, title_search, nsfw_only, spoiler, search
     ):
         q_string = self._build_q_string(
-            label, label_exact, exclude_label, exclude_terms, exclude_urls, exclude_author, author, domain, selftext, title_search, nsfw_only, spoiler, search
+            flair, flair_exact, exclude_flair, exclude_terms, exclude_urls, exclude_author, author, domain, selftext, title_search, nsfw_only, spoiler, search
         )
 
         params = {}
         if q_string:
             params["q"] = q_string
-        if source_str:
+        if subreddit_str:
             params["restrict_sr"] = "on"
         if sort:
             params["sort"] = sort
@@ -193,8 +184,16 @@ class URLBuilder:
             
         params["include_over_18"] = "on" if allow_nsfw else "off"
 
-        if source_str:
-            base = f"{self.BASE}/r/{source_str}/search.rss"
+        # 1. Base URL construction
+        if subreddit_str:
+            # Handle users vs subreddits
+            if subreddit_str.startswith('u/'):
+                base = f"https://www.reddit.com/user/{subreddit_str[2:]}/search.rss"
+            elif subreddit_str.startswith('user/'):
+                base = f"https://www.reddit.com/{subreddit_str}/search.rss"
+            else:
+                clean_sub = subreddit_str[2:] if subreddit_str.startswith('r/') else subreddit_str
+                base = f"https://www.reddit.com/r/{clean_sub}/search.rss"
         else:
             base = f"{self.BASE}/search.rss"
 
@@ -206,13 +205,13 @@ class URLBuilder:
 # Run: python -m reddit2md.core.url_builder
 # =============================================================================
 
-if __name__ == "__main__":
+def main():
     builder = URLBuilder()
     passed = 0
     failed = 0
 
     def check(label_desc, result, expected):
-        global passed, failed
+        nonlocal passed, failed
         if result == expected:
             print(f"  ✅ PASS: {label_desc}")
             passed += 1

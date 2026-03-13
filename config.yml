@@ -3,7 +3,7 @@ settings:
   debug: false
   detail: MD
   sort: new
-  group_by_source: true
+  group_by: subreddit
   max_results: 3
   md_output_directory: ../../workspace/feeds/reddit
   md_log: ../../workspace/data/reddit/log.md
@@ -12,11 +12,12 @@ routine:
 - name: "marvel"
   detail: SM
   max_results: 2
-  subreddit: ["MarvelStudioSpoilers"]
-- name: "max"
   subreddit: MarvelStudiosSpoilers
-- detail: LG
+- name: "marvel-lg"
+  subreddit: MarvelStudiosSpoilers
+- name: "marvel-multi"
+  detail: LG
   max_results: 3
-  sources: 
-    - "Marvel comics"
+  subreddits:
+    - "MarvelComics"
     - "MarvelStudiosSpoilers"
